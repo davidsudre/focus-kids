@@ -1,0 +1,907 @@
+import React, { useState, useEffect } from "react";
+import { Mission, Reward, DailyStats, KidProfile, Period, UserSession, ManagedUser, ActivityLog, RedemptionLog, ApprovalRequest } from "./types";
+import { DEFAULT_MISSIONS, DEFAULT_REWARDS, DEFAULT_PROFILE, DEFAULT_USERS } from "./initialData";
+import KidDashboard from "./components/KidDashboard";
+import RewardStore from "./components/RewardStore";
+import ProgressReport from "./components/ProgressReport";
+import ParentPanel from "./components/ParentPanel";
+import LoginScreen from "./components/LoginScreen";
+import { TodayIcon, RecompensasIcon, ProgressoIcon, PaisIcon } from "./components/Icons";
+import { Calendar, Award, BarChart3, ShieldCheck, HelpCircle, Key, Lock, Sparkles, Star, LogOut, Users, Cloud, CloudOff, RefreshCw } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
+import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { db } from "./firebase";
+
+export default function App() {
+  // Navigation State
+  const [activeTab, setActiveTab] = useState<"hoje" | "recompensas" | "progresso" | "pais">("hoje");
+
+  // User Session State
+  const [session, setSession] = useState<UserSession | null>(() => {
+    const saved = localStorage.getItem("focus_kids_session");
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Core App States
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [missions, setMissions] = useState<Mission[]>([]);
+  const [rewards, setRewards] = useState<Reward[]>([]);
+  const [profile, setProfile] = useState<KidProfile>(DEFAULT_PROFILE);
+  const [history, setHistory] = useState<DailyStats[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [redemptions, setRedemptions] = useState<RedemptionLog[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+
+  // Synchronization status
+  const [syncStatus, setSyncStatus] = useState<"synced" | "syncing" | "error">("synced");
+
+  // Security (PIN protection for Parent Tab)
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState(false);
+
+  // Computed: is parent logged in?
+  const isParent = session?.role === "pai" || session?.role === "mae";
+
+  // 1. Listen to all Firestore collections in real-time
+  useEffect(() => {
+    setSyncStatus("syncing");
+
+    // Listen to users
+    const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
+      if (snapshot.empty) {
+        DEFAULT_USERS.forEach((u) => {
+          setDoc(doc(db, "users", u.id), u);
+        });
+      } else {
+        const list: ManagedUser[] = [];
+        snapshot.forEach((d) => list.push(d.data() as ManagedUser));
+        setUsers(list);
+      }
+    });
+
+    // Listen to missions
+    const unsubMissions = onSnapshot(collection(db, "missions"), (snapshot) => {
+      if (snapshot.empty) {
+        DEFAULT_MISSIONS.forEach((m) => {
+          setDoc(doc(db, "missions", m.id), m);
+        });
+      } else {
+        const list: Mission[] = [];
+        snapshot.forEach((d) => list.push(d.data() as Mission));
+        list.sort((a, b) => a.id.localeCompare(b.id));
+        setMissions(list);
+      }
+    });
+
+    // Listen to rewards
+    const unsubRewards = onSnapshot(collection(db, "rewards"), (snapshot) => {
+      if (snapshot.empty) {
+        DEFAULT_REWARDS.forEach((r) => {
+          setDoc(doc(db, "rewards", r.id), r);
+        });
+      } else {
+        const list: Reward[] = [];
+        snapshot.forEach((d) => list.push(d.data() as Reward));
+        list.sort((a, b) => a.id.localeCompare(b.id));
+        setRewards(list);
+      }
+    });
+
+    // Listen to profile
+    const unsubProfile = onSnapshot(doc(db, "profiles", "bernardo"), (docSnap) => {
+      if (!docSnap.exists()) {
+        setDoc(doc(db, "profiles", "bernardo"), DEFAULT_PROFILE);
+      } else {
+        setProfile(docSnap.data() as KidProfile);
+      }
+    });
+
+    // Listen to history
+    const unsubHistory = onSnapshot(collection(db, "history"), (snapshot) => {
+      if (snapshot.empty) {
+        const defaultHistory = [
+          { date: "2026-07-06", pointsEarned: 35, completedMissions: 3 },
+          { date: "2026-07-05", pointsEarned: 50, completedMissions: 5 }
+        ];
+        defaultHistory.forEach((h, idx) => {
+          setDoc(doc(db, "history", "h_" + idx), h);
+        });
+      } else {
+        const list: DailyStats[] = [];
+        snapshot.forEach((d) => list.push(d.data() as DailyStats));
+        list.sort((a, b) => b.date.localeCompare(a.date));
+        setHistory(list);
+      }
+    });
+
+    // Listen to activity logs
+    const unsubLogs = onSnapshot(collection(db, "activityLogs"), (snapshot) => {
+      if (snapshot.empty) {
+        const initialLog = {
+          id: "act_init",
+          timestamp: new Date().toISOString(),
+          userId: "u_david",
+          userName: "Pai (David)",
+          userAvatar: "👨‍💼",
+          type: "points_added",
+          title: "Focus Kids conectado e sincronizado no Servidor de Nuvem! ☁️",
+          points: 0,
+          icon: "☁️"
+        };
+        setDoc(doc(db, "activityLogs", "act_init"), initialLog);
+      } else {
+        const list: ActivityLog[] = [];
+        snapshot.forEach((d) => list.push(d.data() as ActivityLog));
+        list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        setActivityLogs(list.slice(0, 50));
+      }
+    });
+
+    // Listen to redemptions
+    const unsubRedemptions = onSnapshot(collection(db, "redemptions"), (snapshot) => {
+      const list: RedemptionLog[] = [];
+      snapshot.forEach((d) => list.push(d.data() as RedemptionLog));
+      list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      setRedemptions(list);
+    });
+
+    // Listen to approvals
+    const unsubApprovals = onSnapshot(collection(db, "approvals"), (snapshot) => {
+      const list: ApprovalRequest[] = [];
+      snapshot.forEach((d) => list.push(d.data() as ApprovalRequest));
+      list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      setApprovals(list);
+      setSyncStatus("synced");
+    });
+
+    return () => {
+      unsubUsers();
+      unsubMissions();
+      unsubRewards();
+      unsubProfile();
+      unsubHistory();
+      unsubLogs();
+      unsubRedemptions();
+      unsubApprovals();
+    };
+  }, []);
+
+  // Keep session local storage for continuous login
+  useEffect(() => {
+    if (session) {
+      localStorage.setItem("focus_kids_session", JSON.stringify(session));
+    } else {
+      localStorage.removeItem("focus_kids_session");
+    }
+  }, [session]);
+
+  // Helper to log activities durably
+  const logActivity = async (
+    type: ActivityLog["type"],
+    title: string,
+    points?: number,
+    icon?: string
+  ) => {
+    const activeUser = users.find(u => u.username === session?.username) || {
+      id: "system",
+      name: session?.name || "Sistema",
+      avatar: session?.avatar || "🤖"
+    };
+
+    const newLog: ActivityLog = {
+      id: "act_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      timestamp: new Date().toISOString(),
+      userId: activeUser.id,
+      userName: activeUser.name,
+      userAvatar: activeUser.avatar,
+      type,
+      title,
+      points: points || 0,
+      icon: icon || "✨"
+    };
+    try {
+      await setDoc(doc(db, "activityLogs", newLog.id), newLog);
+    } catch (e) {
+      console.error("Log activity error:", e);
+    }
+  };
+
+  // User CRUD handlers
+  const handleAddUser = async (newUser: Omit<ManagedUser, "id">) => {
+    setSyncStatus("syncing");
+    const id = "u_" + Date.now();
+    const user: ManagedUser = {
+      ...newUser,
+      id,
+      linkedUserIds: newUser.linkedUserIds || []
+    };
+    try {
+      await setDoc(doc(db, "users", id), user);
+      await logActivity("user_added", `Criou o usuário "${newUser.name}"`, 0, newUser.avatar);
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleUpdateUser = async (updatedUser: ManagedUser) => {
+    setSyncStatus("syncing");
+    try {
+      await setDoc(doc(db, "users", updatedUser.id), updatedUser);
+      if (session && session.username === updatedUser.username) {
+        setSession(prev => prev ? {
+          ...prev,
+          role: updatedUser.role,
+          name: updatedUser.name,
+          avatar: updatedUser.avatar,
+          username: updatedUser.username
+        } : null);
+      }
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    setSyncStatus("syncing");
+    const targetUser = users.find(u => u.id === userId);
+    try {
+      await deleteDoc(doc(db, "users", userId));
+      if (targetUser) {
+        await logActivity("user_added", `Removeu o usuário "${targetUser.name}"`, 0, targetUser.avatar);
+      }
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  // Handle subtask check/uncheck
+  const handleToggleSubtask = async (missionId: string, subtaskIndex: number) => {
+    setSyncStatus("syncing");
+    const mission = missions.find(m => m.id === missionId);
+    if (mission) {
+      const updatedSubtasks = [...(mission.completedSubtasks || [])];
+      updatedSubtasks[subtaskIndex] = !updatedSubtasks[subtaskIndex];
+      const subtaskTitle = mission.subtasks?.[subtaskIndex] || "";
+      if (updatedSubtasks[subtaskIndex]) {
+        await logActivity("mission_subtask", `Completou a etapa "${subtaskTitle}" da missão "${mission.title}"`, 0, mission.icon);
+      }
+      const allCompleted = updatedSubtasks.every(v => v === true);
+      if (allCompleted) {
+        await logActivity("mission_completed", `Concluiu todas as etapas da missão "${mission.title}"! 🎉 (Aguardando aprovação)`, 0, mission.icon);
+      }
+      try {
+        await updateDoc(doc(db, "missions", missionId), {
+          completedSubtasks: updatedSubtasks,
+          completed: allCompleted,
+          completedAt: allCompleted ? new Date().toISOString() : null
+        });
+        setSyncStatus("synced");
+      } catch (e) {
+        setSyncStatus("error");
+      }
+    }
+  };
+
+  // Helper to get local date string YYYY-MM-DD
+  const getLocalDateString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatLocalDate = (dateStr: string) => {
+    if (!dateStr) return "";
+    const parts = dateStr.split("-");
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return dateStr;
+  };
+
+  // Mark a mission as completed & create a pending approval request
+  const handleCompleteMission = async (missionId: string) => {
+    setSyncStatus("syncing");
+    const mission = missions.find(m => m.id === missionId);
+    if (mission && !mission.completed) {
+      const newApproval: ApprovalRequest = {
+        id: "app_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+        timestamp: new Date().toISOString(),
+        date: getLocalDateString(),
+        missionId: mission.id,
+        missionTitle: mission.title,
+        missionIcon: mission.icon,
+        points: mission.points,
+        status: "pending"
+      };
+      try {
+        await setDoc(doc(db, "approvals", newApproval.id), newApproval);
+        await logActivity("mission_completed", `Completou a missão "${mission.title}"! 🎉 (Aguardando aprovação)`, 0, mission.icon);
+        await updateDoc(doc(db, "missions", missionId), {
+          completed: true,
+          completedAt: new Date().toISOString()
+        });
+        setSyncStatus("synced");
+      } catch (e) {
+        setSyncStatus("error");
+      }
+    }
+  };
+
+  const handleApprovePoints = async (approvalId: string) => {
+    setSyncStatus("syncing");
+    const req = approvals.find(a => a.id === approvalId);
+    if (req && req.status === "pending") {
+      try {
+        await updateDoc(doc(db, "approvals", approvalId), {
+          status: "approved",
+          resolvedAt: new Date().toISOString()
+        });
+        await updateDoc(doc(db, "profiles", "bernardo"), {
+          currentPoints: profile.currentPoints + req.points,
+          totalPointsAllTime: profile.totalPointsAllTime + req.points
+        });
+        const dateStr = req.date;
+        const historyItem = history.find(h => h.date === dateStr);
+        if (historyItem) {
+          await setDoc(doc(db, "history", dateStr), {
+            date: dateStr,
+            pointsEarned: (historyItem.pointsEarned || 0) + req.points,
+            completedMissions: (historyItem.completedMissions || 0) + 1
+          });
+        } else {
+          await setDoc(doc(db, "history", dateStr), {
+            date: dateStr,
+            pointsEarned: req.points,
+            completedMissions: 1
+          });
+        }
+        await logActivity("points_added", `Aprovou +${req.points} pts de Bernardo para a missão "${req.missionTitle}" de ${formatLocalDate(req.date)}`, req.points, req.missionIcon);
+        setSyncStatus("synced");
+      } catch (e) {
+        setSyncStatus("error");
+      }
+    }
+  };
+
+  const handleRejectPoints = async (approvalId: string) => {
+    setSyncStatus("syncing");
+    const req = approvals.find(a => a.id === approvalId);
+    if (req && req.status === "pending") {
+      try {
+        await updateDoc(doc(db, "approvals", approvalId), {
+          status: "rejected",
+          resolvedAt: new Date().toISOString()
+        });
+        await updateDoc(doc(db, "missions", req.missionId), {
+          completed: false,
+          completedAt: null,
+          completedSubtasks: missions.find(m => m.id === req.missionId)?.subtasks?.map(() => false) || []
+        });
+        await logActivity("points_added", `Não aprovou os pontos de "${req.missionTitle}" (${formatLocalDate(req.date)}) - Tarefa redefinida`, 0, req.missionIcon);
+        setSyncStatus("synced");
+      } catch (e) {
+        setSyncStatus("error");
+      }
+    }
+  };
+
+  // Handle claiming a reward
+  const handleClaimReward = async (rewardId: string, cost: number) => {
+    setSyncStatus("syncing");
+    if (profile.currentPoints >= cost) {
+      const reward = rewards.find(r => r.id === rewardId);
+      if (reward) {
+        try {
+          await updateDoc(doc(db, "profiles", "bernardo"), {
+            currentPoints: profile.currentPoints - cost
+          });
+          await updateDoc(doc(db, "rewards", rewardId), {
+            claimedCount: (reward.claimedCount || 0) + 1
+          });
+          const newRedemption: RedemptionLog = {
+            id: "red_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+            timestamp: new Date().toISOString(),
+            rewardId,
+            rewardTitle: reward.title,
+            rewardIcon: reward.icon,
+            cost,
+            kidName: profile.name,
+            status: "pending"
+          };
+          await setDoc(doc(db, "redemptions", newRedemption.id), newRedemption);
+          await logActivity("reward_claimed", `Resgatou o prêmio: "${reward.title}"! 🎁`, -cost, reward.icon);
+          setSyncStatus("synced");
+        } catch (e) {
+          setSyncStatus("error");
+        }
+      }
+    }
+  };
+
+  // Parent panel actions: Add, edit, delete missions
+  const handleAddMission = async (newMission: Omit<Mission, "id" | "completed" | "completedSubtasks">) => {
+    setSyncStatus("syncing");
+    const id = "m_" + Date.now();
+    const mission: Mission = {
+      ...newMission,
+      id,
+      completed: false,
+      completedSubtasks: newMission.subtasks?.map(() => false) || [],
+      createdBy: session?.role === "mae" ? "mae" : session?.role === "pai" ? "pai" : "default"
+    };
+    try {
+      await setDoc(doc(db, "missions", id), mission);
+      await logActivity("mission_added", `Cadastrou nova missão: "${newMission.title}"`, newMission.points, newMission.icon);
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleUpdateMission = async (updatedMission: Mission) => {
+    setSyncStatus("syncing");
+    try {
+      await setDoc(doc(db, "missions", updatedMission.id), updatedMission);
+      await logActivity("mission_added", `Atualizou a missão: "${updatedMission.title}"`, updatedMission.points, updatedMission.icon);
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleDeleteMission = async (missionId: string) => {
+    setSyncStatus("syncing");
+    const targetMission = missions.find(m => m.id === missionId);
+    try {
+      await deleteDoc(doc(db, "missions", missionId));
+      if (targetMission) {
+        await logActivity("mission_added", `Removeu a missão: "${targetMission.title}"`, 0, targetMission.icon);
+      }
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  // Parent panel actions: Add, edit, delete rewards
+  const handleAddReward = async (newReward: Omit<Reward, "id" | "claimedCount">) => {
+    setSyncStatus("syncing");
+    const id = "r_" + Date.now();
+    const reward: Reward = {
+      ...newReward,
+      id,
+      claimedCount: 0,
+      createdBy: session?.role === "mae" ? "mae" : session?.role === "pai" ? "pai" : "default"
+    };
+    try {
+      await setDoc(doc(db, "rewards", id), reward);
+      await logActivity("reward_added", `Cadastrou novo prêmio: "${newReward.title}"`, -newReward.cost, newReward.icon);
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleUpdateReward = async (updatedReward: Reward) => {
+    setSyncStatus("syncing");
+    try {
+      await setDoc(doc(db, "rewards", updatedReward.id), updatedReward);
+      await logActivity("reward_added", `Atualizou o prêmio: "${updatedReward.title}"`, -updatedReward.cost, updatedReward.icon);
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleDeleteReward = async (rewardId: string) => {
+    setSyncStatus("syncing");
+    const targetReward = rewards.find(r => r.id === rewardId);
+    try {
+      await deleteDoc(doc(db, "rewards", rewardId));
+      if (targetReward) {
+        await logActivity("reward_added", `Removeu o prêmio: "${targetReward.title}"`, 0, targetReward.icon);
+      }
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleResetMissions = async () => {
+    setSyncStatus("syncing");
+    try {
+      const promises = missions.map(m =>
+        updateDoc(doc(db, "missions", m.id), {
+          completed: false,
+          completedSubtasks: m.subtasks?.map(() => false) || []
+        })
+      );
+      await Promise.all(promises);
+      await logActivity("points_added", "Resetou o progresso de todas as missões diárias.", 0, "🔄");
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleUpdateKidProfile = async (updates: Partial<KidProfile>) => {
+    setSyncStatus("syncing");
+    try {
+      await updateDoc(doc(db, "profiles", "bernardo"), updates);
+      await logActivity("points_added", `Atualizou o perfil de Bernardo: ${updates.name || ""}`, 0, updates.avatar || "🧑‍🚀");
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleClaimTabletBonus = async () => {
+    setSyncStatus("syncing");
+    try {
+      await updateDoc(doc(db, "profiles", "bernardo"), {
+        currentPoints: profile.currentPoints + 10,
+        totalPointsAllTime: profile.totalPointsAllTime + 10,
+        tabletBonusClaimedDate: getLocalDateString()
+      });
+      await logActivity("points_added", `Resgatou o bônus de +10 pts do Tablet Diário por atingir super meta! 📱✨`, 10, "🎁");
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleUpdateRedemptionStatus = async (redemptionId: string, status: "pending" | "delivered") => {
+    setSyncStatus("syncing");
+    try {
+      await updateDoc(doc(db, "redemptions", redemptionId), {
+        status,
+        deliveredAt: status === "delivered" ? new Date().toISOString() : null
+      });
+      const r = redemptions.find(x => x.id === redemptionId);
+      if (r) {
+        await logActivity(
+          "redemption_status",
+          `Marcou o prêmio "${r.rewardTitle}" como ${status === "delivered" ? "Entregue" : "Pendente"}`,
+          0,
+          r.rewardIcon
+        );
+      }
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  const handleClearLogs = async () => {
+    setSyncStatus("syncing");
+    try {
+      const p1 = activityLogs.map(log => deleteDoc(doc(db, "activityLogs", log.id)));
+      const p2 = redemptions.map(red => deleteDoc(doc(db, "redemptions", red.id)));
+      await Promise.all([...p1, ...p2]);
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncStatus("error");
+    }
+  };
+
+  // Security gate for parent tab
+  const handleTabClick = (tab: typeof activeTab) => {
+    if (tab === "pais" && !isParent) {
+      setPinInput("");
+      setPinError(false);
+      setIsPinModalOpen(true);
+    } else {
+      setActiveTab(tab);
+    }
+  };
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinInput === "1234") {
+      // Find david or fallback
+      const adminUser = users.find(u => u.username === "david") || {
+        role: "pai" as const,
+        name: "Pai (David)",
+        avatar: "👨‍💼",
+        username: "david"
+      };
+      setSession({
+        role: adminUser.role,
+        name: adminUser.name,
+        avatar: adminUser.avatar,
+        username: adminUser.username,
+        partnerName: "Beatriz"
+      });
+      setIsPinModalOpen(false);
+      setActiveTab("pais");
+    } else {
+      setPinError(true);
+      setPinInput("");
+    }
+  };
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex justify-center items-start py-0 md:py-8" id="app-root">
+        {/* Centered responsive tablet container */}
+        <div className="w-full max-w-[480px] md:max-w-[720px] lg:max-w-[800px] min-h-screen md:min-h-[850px] md:rounded-2xl bg-background shadow-2xl relative flex flex-col justify-center items-center p-6 border border-outline-variant/20 overflow-hidden transition-all duration-300">
+          <LoginScreen users={users} onLogin={(userSession) => {
+            setSession(userSession);
+            // If child logs in, default to "hoje" tab
+            if (userSession.role === "kid") {
+              setActiveTab("hoje");
+            } else {
+              // If parent logs in, direct them straight to parents panel
+              setActiveTab("pais");
+            }
+          }} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 flex justify-center items-start py-0 md:py-8" id="app-root">
+      {/* Centered responsive tablet container */}
+      <div className="w-full max-w-[480px] md:max-w-[720px] lg:max-w-[800px] min-h-screen md:min-h-[850px] md:rounded-2xl bg-background shadow-2xl relative flex flex-col pb-28 border border-outline-variant/20 overflow-hidden transition-all duration-300">
+        
+        {/* Top Header Bar */}
+        <header className="sticky top-0 bg-background z-30 px-6 py-4 flex justify-between items-center border-b border-outline-variant/20 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-black text-sm">
+              🎯
+            </span>
+            <div>
+              <h1 className="font-bold text-base text-primary tracking-tight leading-none">
+                Focus Kids
+              </h1>
+              <span className="text-[9px] text-on-surface-variant font-black uppercase tracking-wider">
+                Rotina, Foco e Incentivo 🚀
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Cloud sync status indicator */}
+            <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${
+              syncStatus === "synced"
+                ? "bg-green-50 text-green-600 border border-green-200"
+                : syncStatus === "syncing"
+                ? "bg-blue-50 text-blue-600 border border-blue-200"
+                : "bg-red-50 text-red-600 border border-red-200"
+            }`}>
+              {syncStatus === "synced" && (
+                <>
+                  <Cloud className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                  <span className="hidden xs:inline">Nuvem Sincronizada</span>
+                </>
+              )}
+              {syncStatus === "syncing" && (
+                <>
+                  <RefreshCw className="w-3 h-3 text-blue-500 animate-spin shrink-0" />
+                  <span className="hidden xs:inline">Salvando...</span>
+                </>
+              )}
+              {syncStatus === "error" && (
+                <>
+                  <CloudOff className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                  <span className="hidden xs:inline">Erro de Sync</span>
+                </>
+              )}
+            </div>
+
+            {/* User identification and switch account trigger */}
+            <div className="flex items-center gap-1.5 bg-primary/10 px-3 py-1.5 rounded-full text-primary text-xs font-bold border border-primary/20">
+              <span className="text-sm shrink-0">{session.avatar}</span>
+              <span className="hidden sm:inline text-[11px] uppercase tracking-wider">
+                {session.role === "kid" ? "Bernardo" : session.name}
+              </span>
+            </div>
+
+            <button
+              onClick={() => {
+                setSession(null);
+                setActiveTab("hoje");
+              }}
+              className="bg-surface-container hover:bg-surface-container-high text-on-surface-variant text-xs p-2 rounded-full flex items-center justify-center font-bold transition-all"
+              title="Trocar de Conta / Sair"
+            >
+              <LogOut className="w-4 h-4 text-on-surface-variant" />
+            </button>
+          </div>
+        </header>
+
+        {/* Content body with responsive transition */}
+        <main className="flex-1 px-6 py-5 overflow-y-auto">
+          {activeTab === "hoje" && (
+            <KidDashboard
+              missions={missions}
+              profile={profile}
+              onToggleSubtask={handleToggleSubtask}
+              onCompleteMission={handleCompleteMission}
+              onClaimPoints={(pts) => setProfile(prev => ({ ...prev, currentPoints: prev.currentPoints + pts }))}
+              approvals={approvals}
+              onClaimTabletBonus={handleClaimTabletBonus}
+            />
+          )}
+
+          {activeTab === "recompensas" && (
+            <RewardStore
+              rewards={rewards}
+              profile={profile}
+              onClaimReward={handleClaimReward}
+            />
+          )}
+
+          {activeTab === "progresso" && (
+            <ProgressReport
+              missions={missions}
+              profile={profile}
+              history={history}
+              activityLogs={activityLogs}
+              redemptions={redemptions}
+            />
+          )}
+
+          {activeTab === "pais" && isParent && (
+            <ParentPanel
+              missions={missions}
+              rewards={rewards}
+              profile={profile}
+              onAddMission={handleAddMission}
+              onUpdateMission={handleUpdateMission}
+              onDeleteMission={handleDeleteMission}
+              onAddReward={handleAddReward}
+              onUpdateReward={handleUpdateReward}
+              onDeleteReward={handleDeleteReward}
+              onResetMissions={handleResetMissions}
+              onUpdateKidProfile={handleUpdateKidProfile}
+              users={users}
+              session={session}
+              onAddUser={handleAddUser}
+              onUpdateUser={handleUpdateUser}
+              onDeleteUser={handleDeleteUser}
+              activityLogs={activityLogs}
+              redemptions={redemptions}
+              onUpdateRedemptionStatus={handleUpdateRedemptionStatus}
+              onClearLogs={handleClearLogs}
+              approvals={approvals}
+              onApprovePoints={handleApprovePoints}
+              onRejectPoints={handleRejectPoints}
+            />
+          )}
+        </main>
+
+        {/* Bottom Navigation with highly polished active tabs */}
+        <nav className="absolute bottom-0 left-0 right-0 bg-surface-container-lowest border-t border-outline-variant/30 px-4 py-2.5 flex justify-around items-center z-30 shadow-[0_-4px_24px_rgba(0,96,172,0.05)] md:rounded-b-2xl">
+          <button
+            onClick={() => handleTabClick("hoje")}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 ${
+              activeTab === "hoje"
+                ? "text-primary scale-105 font-bold"
+                : "text-on-surface-variant/70 hover:text-on-surface"
+            }`}
+          >
+            <TodayIcon active={activeTab === "hoje"} />
+            <span className="text-[11px] font-label-lg leading-none">Hoje</span>
+          </button>
+
+          <button
+            onClick={() => handleTabClick("recompensas")}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 ${
+              activeTab === "recompensas"
+                ? "text-tertiary scale-105 font-bold"
+                : "text-on-surface-variant/70 hover:text-on-surface"
+            }`}
+          >
+            <RecompensasIcon active={activeTab === "recompensas"} />
+            <span className="text-[11px] font-label-lg leading-none">Prêmios</span>
+          </button>
+
+          <button
+            onClick={() => handleTabClick("progresso")}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 ${
+              activeTab === "progresso"
+                ? "text-secondary scale-105 font-bold"
+                : "text-on-surface-variant/70 hover:text-on-surface"
+            }`}
+          >
+            <ProgressoIcon active={activeTab === "progresso"} />
+            <span className="text-[11px] font-label-lg leading-none">Evolução</span>
+          </button>
+
+          <button
+            onClick={() => handleTabClick("pais")}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 ${
+              activeTab === "pais"
+                ? "text-primary scale-105 font-bold"
+                : "text-on-surface-variant/70 hover:text-on-surface"
+            }`}
+          >
+            <PaisIcon active={activeTab === "pais"} />
+            <span className="text-[11px] font-label-lg leading-none">Pais</span>
+          </button>
+        </nav>
+
+        {/* PIN protection dialog modal */}
+        <AnimatePresence>
+          {isPinModalOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-40 p-6"
+              onClick={() => setIsPinModalOpen(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.9, y: 20 }}
+                className="bg-surface-container-lowest p-6 rounded-lg max-w-[320px] w-full shadow-2xl border border-outline-variant/30 text-center flex flex-col gap-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="w-12 h-12 bg-primary-fixed rounded-full flex items-center justify-center text-primary mx-auto">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-on-surface">Painel dos Pais</h3>
+                  <p className="text-xs text-on-surface-variant mt-1">
+                    Digite a senha dos pais para acessar as configurações.
+                  </p>
+                  <p className="text-[10px] text-primary font-bold mt-1.5 bg-primary-fixed/30 py-1 rounded-full">
+                    Dica de Teste: a senha padrão é <strong>1234</strong>
+                  </p>
+                </div>
+
+                <form onSubmit={handlePinSubmit} className="flex flex-col gap-3">
+                  <input
+                    type="password"
+                    maxLength={4}
+                    value={pinInput}
+                    onChange={(e) => {
+                      setPinInput(e.target.value.replace(/\D/g, ""));
+                      setPinError(false);
+                    }}
+                    placeholder="••••"
+                    className={`bg-surface-container p-3 rounded-lg text-center tracking-widest text-2xl font-bold border-2 focus:bg-surface-container-lowest ${
+                      pinError ? "border-error focus:border-error" : "border-transparent focus:border-primary/40"
+                    }`}
+                    autoFocus
+                    required
+                  />
+
+                  {pinError && (
+                    <span className="text-xs text-error font-bold">Senha incorreta. Tente novamente!</span>
+                  )}
+
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      className="flex-1 bg-primary text-on-primary py-3 rounded-full font-label-lg text-xs chunky-button"
+                    >
+                      Entrar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPinModalOpen(false)}
+                      className="flex-1 bg-surface-container text-on-surface-variant py-3 rounded-full font-label-lg text-xs chunky-button"
+                    >
+                      Voltar
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+      </div>
+    </div>
+  );
+}

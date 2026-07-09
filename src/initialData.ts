@@ -1,0 +1,166 @@
+import { Mission, Reward, KidProfile, ManagedUser } from "./types";
+
+export const DEFAULT_USERS: ManagedUser[] = [
+  {
+    id: "u_david",
+    username: "david",
+    password: "1234",
+    name: "Pai (David)",
+    role: "pai",
+    avatar: "👨‍💼",
+    linkedUserIds: ["u_bernardo"]
+  },
+  {
+    id: "u_beatriz",
+    username: "beatriz",
+    password: "1234",
+    name: "Mãe (Beatriz)",
+    role: "mae",
+    avatar: "👩‍💼",
+    linkedUserIds: ["u_bernardo"]
+  },
+  {
+    id: "u_bernardo",
+    username: "bernardo",
+    password: "1234",
+    name: "Bernardo",
+    role: "kid",
+    avatar: "🧑‍🚀",
+    linkedUserIds: ["u_david", "u_beatriz"]
+  }
+];
+
+export const DEFAULT_MISSIONS: Mission[] = [
+  {
+    id: "m1",
+    title: "Arrumar a Cama",
+    description: "Deixe seu quarto super organizado para começar o dia como um herói!",
+    period: "manha",
+    points: 10,
+    icon: "🛏️",
+    completed: false,
+    subtasks: ["Esticar o lençol direitinho", "Ajeitar o travesseiro", "Dobrar o cobertor"],
+    completedSubtasks: [false, false, false],
+    createdBy: "default"
+  },
+  {
+    id: "m2",
+    title: "Escovar os Dentes (Manhã)",
+    description: "Dentes limpinhos e hálito fresco para um sorriso brilhante!",
+    period: "manha",
+    points: 10,
+    icon: "🪥",
+    completed: false,
+    subtasks: ["Passar o fio dental", "Escovar os dentes da frente e de trás", "Lavar a escova e guardar"],
+    completedSubtasks: [false, false, false],
+    createdBy: "default",
+    isEssential: true
+  },
+  {
+    id: "m3",
+    title: "Lição de Casa",
+    description: "Foco total na tarefa da escola para exercitar o cérebro!",
+    period: "tarde",
+    points: 20,
+    icon: "✏️",
+    completed: false,
+    subtasks: ["Organizar a mesa de estudos", "Fazer as tarefas com calma", "Guardar o material na mochila"],
+    completedSubtasks: [false, false, false],
+    createdBy: "default",
+    isEssential: true
+  },
+  {
+    id: "m4",
+    title: "Leitura de 15 Minutos",
+    description: "Viaje no mundo dos livros e descubra histórias incríveis!",
+    period: "tarde",
+    points: 15,
+    icon: "📖",
+    completed: false,
+    subtasks: ["Escolher um livro bem legal", "Ler sem interrupções por 15 minutos", "Marcar a página onde parou"],
+    completedSubtasks: [false, false, false],
+    createdBy: "default"
+  },
+  {
+    id: "m5",
+    title: "Guardar os Brinquedos",
+    description: "Coloque cada brinquedo no seu lar especial para mantê-los seguros!",
+    period: "noite",
+    points: 15,
+    icon: "🧸",
+    completed: false,
+    subtasks: ["Recolher brinquedos do chão", "Guardar nas caixas correspondentes", "Deixar o espaço livre"],
+    completedSubtasks: [false, false, false],
+    createdBy: "default",
+    isEssential: true
+  },
+  {
+    id: "m6",
+    title: "Preparar a Mochila e Roupa",
+    description: "Deixe tudo prontinho para o dia seguinte ser super fácil!",
+    period: "noite",
+    points: 15,
+    icon: "🎒",
+    completed: false,
+    subtasks: ["Olhar o horário das aulas", "Colocar os cadernos certos", "Separar o uniforme escolar"],
+    completedSubtasks: [false, false, false],
+    createdBy: "default",
+    isEssential: true
+  }
+];
+
+export const DEFAULT_REWARDS: Reward[] = [
+  {
+    id: "r1",
+    title: "30 Minutos de Videogame",
+    cost: 50,
+    icon: "🎮",
+    claimedCount: 0,
+    createdBy: "default",
+    periodicity: "diario"
+  },
+  {
+    id: "r2",
+    title: "Sorvete Especial no FDS",
+    cost: 150,
+    icon: "🍦",
+    claimedCount: 0,
+    createdBy: "default",
+    periodicity: "semanal"
+  },
+  {
+    id: "r3",
+    title: "Escolher o Jantar de Hoje",
+    cost: 80,
+    icon: "🍕",
+    claimedCount: 0,
+    createdBy: "default",
+    periodicity: "diario"
+  },
+  {
+    id: "r4",
+    title: "Cinema em Casa com Pipoca",
+    cost: 100,
+    icon: "🍿",
+    claimedCount: 0,
+    createdBy: "default",
+    periodicity: "semanal"
+  },
+  {
+    id: "r5",
+    title: "Dormir 30 min mais tarde",
+    cost: 60,
+    icon: "⏰",
+    claimedCount: 0,
+    createdBy: "default",
+    periodicity: "diario"
+  }
+];
+
+export const DEFAULT_PROFILE: KidProfile = {
+  name: "Bernardo",
+  currentPoints: 210,
+  streak: 5,
+  totalPointsAllTime: 1240,
+  avatar: "🧑‍🚀" // Space Explorer avatar! Kids love it.
+};
