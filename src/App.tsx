@@ -58,20 +58,23 @@ export default function App() {
     const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
       if (snapshot.empty) {
         DEFAULT_USERS.forEach((u) => {
-          setDoc(doc(db, "users", u.id), u);
+          setDoc(doc(db, "users", u.id), u).catch((err) => console.error("Error seeding default user:", err));
         });
       } else {
         const list: ManagedUser[] = [];
         snapshot.forEach((d) => list.push(d.data() as ManagedUser));
         setUsers(list);
       }
+    }, (error) => {
+      console.error("Users subscription error:", error);
+      setSyncStatus("error");
     });
 
     // Listen to missions
     const unsubMissions = onSnapshot(collection(db, "missions"), (snapshot) => {
       if (snapshot.empty) {
         DEFAULT_MISSIONS.forEach((m) => {
-          setDoc(doc(db, "missions", m.id), m);
+          setDoc(doc(db, "missions", m.id), m).catch((err) => console.error("Error seeding default mission:", err));
         });
       } else {
         const list: Mission[] = [];
@@ -79,13 +82,16 @@ export default function App() {
         list.sort((a, b) => a.id.localeCompare(b.id));
         setMissions(list);
       }
+    }, (error) => {
+      console.error("Missions subscription error:", error);
+      setSyncStatus("error");
     });
 
     // Listen to rewards
     const unsubRewards = onSnapshot(collection(db, "rewards"), (snapshot) => {
       if (snapshot.empty) {
         DEFAULT_REWARDS.forEach((r) => {
-          setDoc(doc(db, "rewards", r.id), r);
+          setDoc(doc(db, "rewards", r.id), r).catch((err) => console.error("Error seeding default reward:", err));
         });
       } else {
         const list: Reward[] = [];
@@ -93,15 +99,21 @@ export default function App() {
         list.sort((a, b) => a.id.localeCompare(b.id));
         setRewards(list);
       }
+    }, (error) => {
+      console.error("Rewards subscription error:", error);
+      setSyncStatus("error");
     });
 
     // Listen to profile
     const unsubProfile = onSnapshot(doc(db, "profiles", "bernardo"), (docSnap) => {
       if (!docSnap.exists()) {
-        setDoc(doc(db, "profiles", "bernardo"), DEFAULT_PROFILE);
+        setDoc(doc(db, "profiles", "bernardo"), DEFAULT_PROFILE).catch((err) => console.error("Error seeding default profile:", err));
       } else {
         setProfile(docSnap.data() as KidProfile);
       }
+    }, (error) => {
+      console.error("Profile subscription error:", error);
+      setSyncStatus("error");
     });
 
     // Listen to history
@@ -112,7 +124,7 @@ export default function App() {
           { date: "2026-07-05", pointsEarned: 50, completedMissions: 5 }
         ];
         defaultHistory.forEach((h, idx) => {
-          setDoc(doc(db, "history", "h_" + idx), h);
+          setDoc(doc(db, "history", "h_" + idx), h).catch((err) => console.error("Error seeding default history:", err));
         });
       } else {
         const list: DailyStats[] = [];
@@ -120,6 +132,9 @@ export default function App() {
         list.sort((a, b) => b.date.localeCompare(a.date));
         setHistory(list);
       }
+    }, (error) => {
+      console.error("History subscription error:", error);
+      setSyncStatus("error");
     });
 
     // Listen to activity logs
@@ -136,13 +151,16 @@ export default function App() {
           points: 0,
           icon: "☁️"
         };
-        setDoc(doc(db, "activityLogs", "act_init"), initialLog);
+        setDoc(doc(db, "activityLogs", "act_init"), initialLog).catch((err) => console.error("Error seeding initial log:", err));
       } else {
         const list: ActivityLog[] = [];
         snapshot.forEach((d) => list.push(d.data() as ActivityLog));
         list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
         setActivityLogs(list.slice(0, 50));
       }
+    }, (error) => {
+      console.error("Activity logs subscription error:", error);
+      setSyncStatus("error");
     });
 
     // Listen to redemptions
@@ -151,6 +169,9 @@ export default function App() {
       snapshot.forEach((d) => list.push(d.data() as RedemptionLog));
       list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       setRedemptions(list);
+    }, (error) => {
+      console.error("Redemptions subscription error:", error);
+      setSyncStatus("error");
     });
 
     // Listen to approvals
@@ -160,6 +181,9 @@ export default function App() {
       list.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       setApprovals(list);
       setSyncStatus("synced");
+    }, (error) => {
+      console.error("Approvals subscription error:", error);
+      setSyncStatus("error");
     });
 
     return () => {
