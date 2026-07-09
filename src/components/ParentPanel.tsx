@@ -1475,7 +1475,7 @@ export default function ParentPanel({
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-on-surface-variant">Emoji do Ícone</label>
                   <div className="flex flex-wrap gap-2">
-                    {["🧹", "📚", "🪥", "🛏️", "✏️", "🎒", "🧼", "🧸", "✨", "📱", "💻", "📺", "🎧", "🧩", "🧠", "🤸", "⚽", "🐾", "🌱", "🍎"].map(emoji => (
+                    {["🧹", "📚", "🪥", "🛏️", "✏️", "🎒", "🧼", "🧸", "✨", "📱", "💻", "📺", "🎧", "🧩", "🧠", "🤸", "⚽", "🐾", "🌱", "🍎", "🥦", "🥕", "🍌", "🥛", "🍳", "🍲", "🍽️", "🍇", "🍉", "🍒", "🍕", "🍔", "🍿", "🍩", "💧", "⏰", "👟", "🚴", "🎨", "🚀"].map(emoji => (
                       <button
                         key={emoji}
                         type="button"
@@ -1550,13 +1550,13 @@ export default function ParentPanel({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
           >
             <motion.div
               initial={{ scale: 0.95, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 20 }}
-              className="bg-surface-container-lowest rounded-lg max-w-[400px] w-full p-6 shadow-xl border border-outline-variant/30 flex flex-col gap-4"
+              className="bg-surface-container-lowest rounded-lg max-w-[400px] w-full p-6 shadow-xl border border-outline-variant/30 flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex justify-between items-center">
                 <h4 className="font-bold text-lg text-on-surface">
@@ -1591,7 +1591,7 @@ export default function ParentPanel({
                     onChange={e => setRewardCost(Number(e.target.value))}
                     className="bg-surface-container p-3 rounded-lg text-sm border-2 border-transparent focus:border-primary/40 focus:bg-surface-container-lowest"
                     min={10}
-                    max={1000}
+                    max={5000}
                     required
                   />
                 </div>
