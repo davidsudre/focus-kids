@@ -70,8 +70,6 @@ export default function KidDashboard({
   const progressPercent = totalInPeriod > 0 ? (completedInPeriod / totalInPeriod) * 100 : 0;
 
   const handleSubtaskChange = (missionId: string, index: number, isCurrentlyCompleted: boolean) => {
-    onToggleSubtask(missionId, index);
-
     // Find the mission to check if this completion triggers the final completion
     const mission = missions.find(m => m.id === missionId);
     if (mission && mission.subtasks && mission.completedSubtasks) {
@@ -87,11 +85,32 @@ export default function KidDashboard({
           points: mission.points,
           title: mission.title
         });
-        // Call parent completion handler
+        // Call parent completion handler (will also set all subtasks as complete on db)
         onCompleteMission(missionId);
         // Collapse card
         setExpandedMissionId(null);
+      } else {
+        // Just toggle single subtask normally
+        onToggleSubtask(missionId, index);
       }
+    } else {
+      onToggleSubtask(missionId, index);
+    }
+  };
+
+  const handleQuickComplete = (missionId: string) => {
+    const mission = missions.find(m => m.id === missionId);
+    if (mission && !mission.completed) {
+      // Trigger celebration!
+      setShowCelebration({
+        show: true,
+        points: mission.points,
+        title: mission.title
+      });
+      // Call parent completion handler
+      onCompleteMission(missionId);
+      // Collapse card
+      setExpandedMissionId(null);
     }
   };
 
@@ -555,6 +574,18 @@ export default function KidDashboard({
                             );
                           })}
                         </div>
+
+                        {/* Quick complete button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickComplete(mission.id);
+                          }}
+                          className="mt-2 w-full bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] text-white py-3.5 px-4 rounded-xl font-bold text-sm shadow-[0_4px_12px_rgba(16,185,129,0.2)] hover:shadow-[0_6px_16px_rgba(16,185,129,0.3)] transition-all flex items-center justify-center gap-2 border-b-4 border-emerald-700"
+                        >
+                          <CheckCircle2 className="w-5 h-5 text-white animate-pulse" />
+                          <span>Concluir Missão Inteira! 🏆</span>
+                        </button>
                       </div>
                     </motion.div>
                   )}

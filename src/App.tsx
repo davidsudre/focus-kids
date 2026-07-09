@@ -354,7 +354,8 @@ export default function App() {
         await logActivity("mission_completed", `Completou a missão "${mission.title}"! 🎉 (Aguardando aprovação)`, 0, mission.icon);
         await updateDoc(doc(db, "missions", missionId), {
           completed: true,
-          completedAt: new Date().toISOString()
+          completedAt: new Date().toISOString(),
+          completedSubtasks: mission.subtasks ? mission.subtasks.map(() => true) : []
         });
         playMissionSuccessSound();
         setSyncStatus("synced");
