@@ -14,6 +14,7 @@ interface ParentPanelProps {
   onUpdateReward: (reward: Reward) => void;
   onDeleteReward: (rewardId: string) => void;
   onResetMissions: () => void;
+  onRestoreDefaultMissions: () => void;
   onUpdateKidProfile: (updates: Partial<KidProfile>) => void;
   users: ManagedUser[];
   session: UserSession;
@@ -22,7 +23,7 @@ interface ParentPanelProps {
   onDeleteUser: (userId: string) => void;
   activityLogs: ActivityLog[];
   redemptions: RedemptionLog[];
-  onUpdateRedemptionStatus: (id: string, status: "pending" | "delivered") => void;
+  onUpdateRedemptionStatus: (id: string, status: "pending" | "delivered" | "rejected") => void;
   onClearLogs?: () => void;
   approvals?: ApprovalRequest[];
   onApprovePoints?: (id: string) => void;
@@ -68,6 +69,7 @@ export default function ParentPanel({
   onUpdateReward,
   onDeleteReward,
   onResetMissions,
+  onRestoreDefaultMissions,
   onUpdateKidProfile,
   users,
   session,
@@ -83,7 +85,7 @@ export default function ParentPanel({
   onRejectPoints
 }: ParentPanelProps) {
   // Navigation inside parent panel: "missions" | "rewards" | "settings" | "users" | "logs"
-  const isDavidRoot = session.username === "david";
+  const isDavidRoot = session.username === "davidsudre";
   const [activeSubTab, setActiveSubTab] = useState<"missions" | "rewards" | "settings" | "users" | "logs">("missions");
 
   // Tablet unlock system logic for Parent View
@@ -129,6 +131,7 @@ export default function ParentPanel({
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
   const [userUsername, setUserUsername] = useState("");
+  const [userEmail, setUserEmail] = useState("");
   const [userPassword, setUserPassword] = useState("1234");
   const [userName, setUserName] = useState("");
   const [userRole, setUserRole] = useState<'pai' | 'mae' | 'kid'>("pai");
@@ -144,6 +147,8 @@ export default function ParentPanel({
 
   // Reset confirmation state
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showResetPointsConfirm, setShowResetPointsConfirm] = useState(false);
+  const [showRestoreMissionsConfirm, setShowRestoreMissionsConfirm] = useState(false);
 
   // Open modal for new mission
   const openNewMissionModal = () => {
@@ -509,6 +514,7 @@ export default function ParentPanel({
   const openNewUserModal = () => {
     setEditingUser(null);
     setUserUsername("");
+    setUserEmail("");
     setUserPassword("1234");
     setUserName("");
     setUserRole("pai");
@@ -521,6 +527,7 @@ export default function ParentPanel({
   const openEditUserModal = (user: ManagedUser) => {
     setEditingUser(user);
     setUserUsername(user.username);
+    setUserEmail(user.email || "");
     setUserPassword(user.password || "1234");
     setUserName(user.name);
     setUserRole(user.role);
@@ -553,6 +560,7 @@ export default function ParentPanel({
       const updated: ManagedUser = {
         ...editingUser,
         username: cleanUsername,
+        email: userEmail.trim().toLowerCase(),
         password: userPassword,
         name: userName,
         role: userRole,
@@ -583,6 +591,7 @@ export default function ParentPanel({
       const tempId = "u_" + Date.now();
       onAddUser({
         username: cleanUsername,
+        email: userEmail.trim().toLowerCase(),
         password: userPassword,
         name: userName,
         role: userRole,
@@ -940,44 +949,136 @@ export default function ParentPanel({
           </form>
 
           {/* Reset Action */}
-          <div className="bg-surface-container-lowest p-5 rounded-lg border border-outline-variant/30 flex flex-col gap-3">
+          <div className="bg-surface-container-lowest p-5 rounded-lg border border-outline-variant/30 flex flex-col gap-4">
             <h4 className="font-bold text-base text-on-surface flex items-center gap-2 text-error">
               <AlertTriangle className="w-5 h-5" /> Zona de Risco
             </h4>
-            <p className="text-xs text-on-surface-variant">
-              Gostaria de resetar o progresso diário? Isso reativará todas as missões para a criança recomeçar o dia com foco!
-            </p>
 
-            {showResetConfirm ? (
-              <div className="flex flex-col gap-2 mt-2">
-                <span className="text-xs font-bold text-error">Tem certeza? Isso zerará o progresso de hoje.</span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      onResetMissions();
-                      setShowResetConfirm(false);
-                      alert("Missões resetadas com sucesso!");
-                    }}
-                    className="flex-1 bg-error text-on-error py-2.5 rounded-full font-bold text-xs chunky-button"
-                  >
-                    Sim, Resetar Agora!
-                  </button>
-                  <button
-                    onClick={() => setShowResetConfirm(false)}
-                    className="flex-1 bg-surface-container text-on-surface-variant py-2.5 rounded-full font-bold text-xs chunky-button"
-                  >
-                    Cancelar
-                  </button>
+            {/* Reset 1: Missões Diárias */}
+            <div className="flex flex-col gap-2 border-b border-outline-variant/20 pb-4">
+              <h5 className="font-bold text-sm text-on-surface">Missões Diárias</h5>
+              <p className="text-xs text-on-surface-variant">
+                Reative todas as missões diárias para que a criança possa recomeçar o dia com o progresso zerado.
+              </p>
+
+              {showResetConfirm ? (
+                <div className="flex flex-col gap-2 mt-2">
+                  <span className="text-xs font-bold text-error">Tem certeza? Isso zerará o progresso de hoje.</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onResetMissions();
+                        setShowResetConfirm(false);
+                        alert("Missões resetadas com sucesso!");
+                      }}
+                      className="flex-1 bg-error text-on-error py-2.5 rounded-full font-bold text-xs chunky-button"
+                    >
+                      Sim, Resetar Agora!
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowResetConfirm(false)}
+                      className="flex-1 bg-surface-container text-on-surface-variant py-2.5 rounded-full font-bold text-xs chunky-button"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowResetConfirm(true)}
-                className="bg-surface-container text-error hover:bg-error-container hover:text-on-error-container py-3 rounded-full font-label-lg text-xs flex items-center justify-center gap-1.5 transition-all"
-              >
-                <RotateCcw className="w-4 h-4" /> Resetar Missões Diárias
-              </button>
-            )}
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirm(true)}
+                  className="bg-surface-container text-error hover:bg-error-container hover:text-on-error-container py-2.5 rounded-full font-label-lg text-xs flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Resetar Missões de Hoje
+                </button>
+              )}
+            </div>
+
+            {/* Reset 2: Zerar Pontuação do Bernardo */}
+            <div className="flex flex-col gap-2 border-b border-outline-variant/20 pb-4">
+              <h5 className="font-bold text-sm text-on-surface">Zerar Pontos de Bernardo</h5>
+              <p className="text-xs text-on-surface-variant">
+                Zera permanentemente a pontuação atual (para resgatar prêmios) e a pontuação total (histórica) do Bernardo. Útil para começar a usar de verdade.
+              </p>
+
+              {showResetPointsConfirm ? (
+                <div className="flex flex-col gap-2 mt-2">
+                  <span className="text-xs font-bold text-error">Tem certeza que deseja zerar TODOS os pontos e conquistas de Bernardo? Essa ação não pode ser desfeita!</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onUpdateKidProfile({ currentPoints: 0, totalPointsAllTime: 0, streak: 0 });
+                        setShowResetPointsConfirm(false);
+                        alert("Pontuação do Bernardo foi zerada com sucesso!");
+                      }}
+                      className="flex-1 bg-error text-on-error py-2.5 rounded-full font-bold text-xs chunky-button"
+                    >
+                      Sim, Zerar Pontos!
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowResetPointsConfirm(false)}
+                      className="flex-1 bg-surface-container text-on-surface-variant py-2.5 rounded-full font-bold text-xs chunky-button"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowResetPointsConfirm(true)}
+                  className="bg-surface-container text-error hover:bg-error-container hover:text-on-error-container py-2.5 rounded-full font-label-lg text-xs flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Zerar Todos os Pontos (Atual e Total)
+                </button>
+              )}
+            </div>
+
+            {/* Reset 3: Restaurar Missões para o Padrão */}
+            <div className="flex flex-col gap-2">
+              <h5 className="font-bold text-sm text-on-surface">Restaurar Missões Padrão</h5>
+              <p className="text-xs text-on-surface-variant">
+                Exclui todas as missões cadastradas atuais e as substitui pelas 6 missões originais padrão de fábrica. Útil se houver atividades duplicadas.
+              </p>
+
+              {showRestoreMissionsConfirm ? (
+                <div className="flex flex-col gap-2 mt-2">
+                  <span className="text-xs font-bold text-error">Tem certeza que deseja restaurar as missões originais padrão? Isso apagará todas as missões customizadas criadas!</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRestoreDefaultMissions();
+                        setShowRestoreMissionsConfirm(false);
+                        alert("Missões padrão restauradas com sucesso!");
+                      }}
+                      className="flex-1 bg-error text-on-error py-2.5 rounded-full font-bold text-xs chunky-button"
+                    >
+                      Sim, Restaurar Originais!
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowRestoreMissionsConfirm(false)}
+                      className="flex-1 bg-surface-container text-on-surface-variant py-2.5 rounded-full font-bold text-xs chunky-button"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowRestoreMissionsConfirm(true)}
+                  className="bg-surface-container text-error hover:bg-error-container hover:text-on-error-container py-2.5 rounded-full font-label-lg text-xs flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar Missões de Fábrica
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1035,6 +1136,11 @@ export default function ParentPanel({
                         <span className="text-[11px] text-on-surface-variant font-mono mt-1.5">
                           Usuário: <strong className="text-on-surface font-bold text-xs">{u.username}</strong>
                         </span>
+                        {u.email && (
+                          <span className="text-[11px] text-on-surface-variant font-mono mt-0.5">
+                            E-mail: <strong className="text-on-surface font-bold text-xs">{u.email}</strong>
+                          </span>
+                        )}
                         <span className="text-[11px] text-on-surface-variant font-mono mt-0.5 flex items-center gap-1 flex-wrap">
                           <span>Senha:</span>
                           <strong className="text-on-surface font-bold text-xs bg-surface-container px-1.5 py-0.25 rounded border border-outline-variant/20">
@@ -1052,7 +1158,7 @@ export default function ParentPanel({
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
-                      {u.username !== "david" ? (
+                      {u.username !== "davidsudre" ? (
                         <button
                           onClick={() => {
                             setUserToDelete(u);
@@ -1198,6 +1304,8 @@ export default function ParentPanel({
                   });
 
                   const isPending = red.status === "pending";
+                  const isDelivered = red.status === "delivered";
+                  const isRejected = red.status === "rejected";
 
                   return (
                     <div
@@ -1205,6 +1313,8 @@ export default function ParentPanel({
                       className={`p-4 rounded-xl flex items-center justify-between border-2 transition-all ${
                         isPending
                           ? "bg-amber-50/40 border-amber-200"
+                          : isRejected
+                          ? "bg-red-50/20 border-red-200/50 opacity-70"
                           : "bg-slate-50/50 border-outline-variant/10 opacity-80"
                       }`}
                     >
@@ -1219,9 +1329,14 @@ export default function ParentPanel({
                           <p className="text-[11px] text-on-surface-variant/70 mt-1 leading-none">
                             Solicitado em {formattedDate} • Bernardo • Custo: <strong className="text-primary">{red.cost} pts</strong>
                           </p>
-                          {red.deliveredAt && (
+                          {red.deliveredAt && isDelivered && (
                             <span className="text-[10px] text-emerald-600 block mt-1.5 font-bold">
                               ✓ Entregue em: {new Date(red.deliveredAt).toLocaleDateString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          )}
+                          {isRejected && (
+                            <span className="text-[10px] text-error block mt-1.5 font-bold flex items-center gap-1">
+                              <X className="w-3 h-3" /> Recusado (Pontos Devolvidos: +{red.cost} pts)
                             </span>
                           )}
                         </div>
@@ -1229,16 +1344,29 @@ export default function ParentPanel({
 
                       <div className="flex items-center gap-2 shrink-0">
                         {isPending ? (
-                          <button
-                            onClick={() => onUpdateRedemptionStatus(red.id, "delivered")}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-4 py-2 rounded-full flex items-center gap-1 shadow-sm hover:shadow transition-all chunky-button"
-                            title="Confirmar que você já entregou esse prêmio a Bernardo"
-                          >
-                            <Check className="w-3.5 h-3.5" /> Entregar
-                          </button>
-                        ) : (
+                          <>
+                            <button
+                              onClick={() => onUpdateRedemptionStatus(red.id, "rejected")}
+                              className="bg-error/10 hover:bg-error text-error hover:text-on-error font-black text-xs px-3.5 py-2 rounded-full flex items-center gap-1 border border-error/20 transition-all cursor-pointer"
+                              title="Recusar resgate e devolver os pontos para Bernardo"
+                            >
+                              <X className="w-3.5 h-3.5" /> Recusar
+                            </button>
+                            <button
+                              onClick={() => onUpdateRedemptionStatus(red.id, "delivered")}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs px-4 py-2 rounded-full flex items-center gap-1 shadow-sm hover:shadow transition-all chunky-button"
+                              title="Confirmar que você já entregou esse prêmio a Bernardo"
+                            >
+                              <Check className="w-3.5 h-3.5" /> Entregar
+                            </button>
+                          </>
+                        ) : isDelivered ? (
                           <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-3 py-1.5 rounded-full flex items-center gap-1">
                             <Check className="w-3.5 h-3.5" /> Entregue
+                          </span>
+                        ) : (
+                          <span className="text-xs bg-error/10 text-error font-bold px-3 py-1.5 rounded-full flex items-center gap-1 border border-error/25">
+                            <X className="w-3.5 h-3.5" /> Recusado
                           </span>
                         )}
                       </div>
@@ -1696,11 +1824,23 @@ export default function ParentPanel({
                     placeholder="Ex: lucca (sem espaços)"
                     className="bg-surface-container p-3 rounded-lg text-sm border-2 border-transparent focus:border-primary/40 focus:bg-surface-container-lowest"
                     required
-                    disabled={editingUser?.username === "david"} // Protect root admin username
+                    disabled={editingUser?.username === "davidsudre"} // Protect root admin username
                   />
-                  {editingUser?.username === "david" && (
-                    <span className="text-[10px] text-on-surface-variant/70 italic">O login do administrador principal David não pode ser alterado.</span>
+                  {editingUser?.username === "davidsudre" && (
+                    <span className="text-[10px] text-on-surface-variant/70 italic">O login do administrador principal David (davidsudre) não pode ser alterado.</span>
                   )}
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-on-surface-variant">E-mail do Usuário (Opcional)</label>
+                  <input
+                    type="email"
+                    value={userEmail}
+                    onChange={e => setUserEmail(e.target.value)}
+                    placeholder="Ex: davidsudre@gmail.com"
+                    className="bg-surface-container p-3 rounded-lg text-sm border-2 border-transparent focus:border-primary/40 focus:bg-surface-container-lowest"
+                  />
+                  <span className="text-[10px] text-on-surface-variant/70 italic">Permite que o usuário faça login usando o e-mail ou nome de usuário.</span>
                 </div>
 
                 <div className="flex flex-col gap-1">
@@ -1729,7 +1869,7 @@ export default function ParentPanel({
                         else setUserAvatar("🧑‍🚀");
                       }}
                       className="bg-surface-container p-3 rounded-lg text-sm border-2 border-transparent focus:border-primary/40 focus:bg-surface-container-lowest"
-                      disabled={editingUser?.username === "david"} // Prevent demoting david
+                      disabled={editingUser?.username === "davidsudre"} // Prevent demoting root admin
                     >
                       <option value="pai">Pai 👨‍💼</option>
                       <option value="mae">Mãe 👩‍💼</option>

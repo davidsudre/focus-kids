@@ -11,6 +11,7 @@ export interface UserSession {
 export interface ManagedUser {
   id: string;
   username: string;
+  email?: string;
   password?: string;
   name: string;
   role: 'pai' | 'mae' | 'kid';
@@ -69,7 +70,7 @@ export interface RedemptionLog {
   rewardIcon: string;
   cost: number;
   kidName: string;
-  status: 'pending' | 'delivered';
+  status: 'pending' | 'delivered' | 'rejected';
   deliveredAt?: string;
 }
 

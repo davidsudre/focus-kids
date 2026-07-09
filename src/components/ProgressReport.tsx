@@ -91,7 +91,7 @@ export default function ProgressReport({ missions, profile, history = [], activi
 
   // Find the weekday with the maximum points in recent history to show as "Melhor Dia"
   const bestDayName = React.useMemo(() => {
-    if (weekdays.length === 0) return "Terça-feira";
+    if (weekdays.length === 0) return "Sem dados";
     let best = weekdays[0];
     let foundAnyPoints = false;
     for (const w of weekdays) {
@@ -109,7 +109,7 @@ export default function ProgressReport({ missions, profile, history = [], activi
       "Sáb": "Sábado",
       "Dom": "Domingo"
     };
-    return foundAnyPoints ? (weekdayMapFull[best.name] || best.name) : "Terça-feira";
+    return foundAnyPoints ? (weekdayMapFull[best.name] || best.name) : "Sem dados";
   }, [weekdays]);
 
   const totalPoints = profile.totalPointsAllTime;
@@ -268,9 +268,12 @@ export default function ProgressReport({ missions, profile, history = [], activi
           Mural de Conquistas Recentes
         </h3>
         
-        {activityLogs && activityLogs.length > 0 ? (
+        {activityLogs && activityLogs.filter(log => ["mission_completed", "mission_subtask", "reward_claimed", "points_added"].includes(log.type)).length > 0 ? (
           <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-1">
-            {activityLogs.slice(0, 8).map((log) => {
+            {activityLogs
+              .filter(log => ["mission_completed", "mission_subtask", "reward_claimed", "points_added"].includes(log.type))
+              .slice(0, 8)
+              .map((log) => {
               const formattedTime = new Date(log.timestamp).toLocaleTimeString("pt-BR", {
                 hour: "2-digit",
                 minute: "2-digit"

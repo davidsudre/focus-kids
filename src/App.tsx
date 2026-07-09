@@ -7,9 +7,9 @@ import ProgressReport from "./components/ProgressReport";
 import ParentPanel from "./components/ParentPanel";
 import LoginScreen from "./components/LoginScreen";
 import { TodayIcon, RecompensasIcon, ProgressoIcon, PaisIcon } from "./components/Icons";
-import { Calendar, Award, BarChart3, ShieldCheck, HelpCircle, Key, Lock, Sparkles, Star, LogOut, Users, Cloud, CloudOff, RefreshCw } from "lucide-react";
+import { Calendar, Award, BarChart3, ShieldCheck, HelpCircle, Key, Lock, Sparkles, Star, LogOut, Users, Cloud, CloudOff, RefreshCw, Target } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs } from "firebase/firestore";
 import { db } from "./firebase";
 import { 
   playClickSound, 
@@ -30,9 +30,9 @@ export default function App() {
   });
 
   // Core App States
-  const [users, setUsers] = useState<ManagedUser[]>([]);
-  const [missions, setMissions] = useState<Mission[]>([]);
-  const [rewards, setRewards] = useState<Reward[]>([]);
+  const [users, setUsers] = useState<ManagedUser[]>(DEFAULT_USERS);
+  const [missions, setMissions] = useState<Mission[]>(DEFAULT_MISSIONS);
+  const [rewards, setRewards] = useState<Reward[]>(DEFAULT_REWARDS);
   const [profile, setProfile] = useState<KidProfile>(DEFAULT_PROFILE);
   const [history, setHistory] = useState<DailyStats[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
@@ -41,11 +41,6 @@ export default function App() {
 
   // Synchronization status
   const [syncStatus, setSyncStatus] = useState<"synced" | "syncing" | "error">("synced");
-
-  // Security (PIN protection for Parent Tab)
-  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
-  const [pinInput, setPinInput] = useState("");
-  const [pinError, setPinError] = useState(false);
 
   // Computed: is parent logged in?
   const isParent = session?.role === "pai" || session?.role === "mae";
@@ -108,6 +103,15 @@ export default function App() {
     const unsubProfile = onSnapshot(doc(db, "profiles", "bernardo"), (docSnap) => {
       if (!docSnap.exists()) {
         setDoc(doc(db, "profiles", "bernardo"), DEFAULT_PROFILE).catch((err) => console.error("Error seeding default profile:", err));
+        
+        // Seed default history only on first-ever database setup!
+        const defaultHistory = [
+          { date: "2026-07-06", pointsEarned: 35, completedMissions: 3 },
+          { date: "2026-07-05", pointsEarned: 50, completedMissions: 5 }
+        ];
+        defaultHistory.forEach((h, idx) => {
+          setDoc(doc(db, "history", "h_" + idx), h).catch((err) => console.error("Error seeding default history:", err));
+        });
       } else {
         setProfile(docSnap.data() as KidProfile);
       }
@@ -118,20 +122,10 @@ export default function App() {
 
     // Listen to history
     const unsubHistory = onSnapshot(collection(db, "history"), (snapshot) => {
-      if (snapshot.empty) {
-        const defaultHistory = [
-          { date: "2026-07-06", pointsEarned: 35, completedMissions: 3 },
-          { date: "2026-07-05", pointsEarned: 50, completedMissions: 5 }
-        ];
-        defaultHistory.forEach((h, idx) => {
-          setDoc(doc(db, "history", "h_" + idx), h).catch((err) => console.error("Error seeding default history:", err));
-        });
-      } else {
-        const list: DailyStats[] = [];
-        snapshot.forEach((d) => list.push(d.data() as DailyStats));
-        list.sort((a, b) => b.date.localeCompare(a.date));
-        setHistory(list);
-      }
+      const list: DailyStats[] = [];
+      snapshot.forEach((d) => list.push(d.data() as DailyStats));
+      list.sort((a, b) => b.date.localeCompare(a.date));
+      setHistory(list);
     }, (error) => {
       console.error("History subscription error:", error);
       setSyncStatus("error");
@@ -555,16 +549,40 @@ export default function App() {
   const handleResetMissions = async () => {
     setSyncStatus("syncing");
     try {
-      const promises = missions.map(m =>
-        updateDoc(doc(db, "missions", m.id), {
-          completed: false,
-          completedSubtasks: m.subtasks?.map(() => false) || []
-        })
-      );
+      const promises = missions.map(m => {
+        const updateData: any = { completed: false };
+        if (m.subtasks && m.subtasks.length > 0) {
+          updateData.completedSubtasks = m.subtasks.map(() => false);
+        } else {
+          updateData.completedSubtasks = [];
+        }
+        return updateDoc(doc(db, "missions", m.id), updateData);
+      });
       await Promise.all(promises);
       await logActivity("points_added", "Resetou o progresso de todas as missões diárias.", 0, "🔄");
       setSyncStatus("synced");
     } catch (e) {
+      console.error("Error resetting missions:", e);
+      setSyncStatus("error");
+    }
+  };
+
+  const handleRestoreDefaultMissions = async () => {
+    setSyncStatus("syncing");
+    try {
+      // 1. Fetch and delete all current missions in Firestore
+      const missionsSnap = await getDocs(collection(db, "missions"));
+      const deletePromises = missionsSnap.docs.map(d => deleteDoc(doc(db, "missions", d.id)));
+      await Promise.all(deletePromises);
+
+      // 2. Seed default missions
+      const seedPromises = DEFAULT_MISSIONS.map(m => setDoc(doc(db, "missions", m.id), m));
+      await Promise.all(seedPromises);
+
+      await logActivity("points_added", "Restaurou todas as missões diárias para o padrão de fábrica. 🛠️🔄", 0, "🔄");
+      setSyncStatus("synced");
+    } catch (e) {
+      console.error("Error restoring default missions:", e);
       setSyncStatus("error");
     }
   };
@@ -573,9 +591,32 @@ export default function App() {
     setSyncStatus("syncing");
     try {
       await updateDoc(doc(db, "profiles", "bernardo"), updates);
-      await logActivity("points_added", `Atualizou o perfil de Bernardo: ${updates.name || ""}`, 0, updates.avatar || "🧑‍🚀");
+      
+      // If parent is resetting the points to 0, let's also clean up history/approvals/redemptions to start fully fresh!
+      if (updates.totalPointsAllTime === 0) {
+        // Clear history documents
+        const historySnap = await getDocs(collection(db, "history"));
+        const p1 = historySnap.docs.map(d => deleteDoc(doc(db, "history", d.id)));
+
+        // Clear approvals
+        const approvalSnap = await getDocs(collection(db, "approvals"));
+        const p2 = approvalSnap.docs.map(d => deleteDoc(doc(db, "approvals", d.id)));
+
+        // Clear redemptions
+        const redemptionSnap = await getDocs(collection(db, "redemptions"));
+        const p3 = redemptionSnap.docs.map(d => deleteDoc(doc(db, "redemptions", d.id)));
+
+        // Wait for all deletions
+        await Promise.all([...p1, ...p2, ...p3]);
+        
+        await logActivity("points_added", "Zerou toda a pontuação, histórico e solicitações de Bernardo para início oficial! 🔄✨", 0, "🔄");
+      } else {
+        await logActivity("points_added", `Atualizou o perfil de Bernardo: ${updates.name || ""}`, 0, updates.avatar || "🧑‍🚀");
+      }
+      
       setSyncStatus("synced");
     } catch (e) {
+      console.error("Error updating kid profile:", e);
       setSyncStatus("error");
     }
   };
@@ -595,19 +636,41 @@ export default function App() {
     }
   };
 
-  const handleUpdateRedemptionStatus = async (redemptionId: string, status: "pending" | "delivered") => {
+  const handleUpdateRedemptionStatus = async (redemptionId: string, status: "pending" | "delivered" | "rejected") => {
     setSyncStatus("syncing");
     try {
       await updateDoc(doc(db, "redemptions", redemptionId), {
         status,
-        deliveredAt: status === "delivered" ? new Date().toISOString() : null
+        deliveredAt: status === "delivered" ? new Date().toISOString() : null,
+        resolvedAt: status === "rejected" ? new Date().toISOString() : null
       });
       const r = redemptions.find(x => x.id === redemptionId);
       if (r) {
+        if (status === "rejected") {
+          // Refund points to child profile
+          await updateDoc(doc(db, "profiles", "bernardo"), {
+            currentPoints: profile.currentPoints + r.cost
+          });
+
+          // Decrement claimed count
+          const reward = rewards.find(x => x.id === r.rewardId);
+          if (reward) {
+            await updateDoc(doc(db, "rewards", r.rewardId), {
+              claimedCount: Math.max(0, (reward.claimedCount || 0) - 1)
+            });
+          }
+        }
+
+        let statusText = "Pendente";
+        if (status === "delivered") statusText = "Entregue";
+        if (status === "rejected") statusText = "Recusado (Pontos Devolvidos)";
+
         await logActivity(
           "redemption_status",
-          `Marcou o prêmio "${r.rewardTitle}" como ${status === "delivered" ? "Entregue" : "Pendente"}`,
-          0,
+          status === "rejected"
+            ? `Recusou o prêmio "${r.rewardTitle}" (Pontos devolvidos: +${r.cost} pts)`
+            : `Marcou o prêmio "${r.rewardTitle}" como ${statusText}`,
+          status === "rejected" ? r.cost : 0,
           r.rewardIcon
         );
       }
@@ -633,44 +696,17 @@ export default function App() {
   const handleTabClick = (tab: typeof activeTab) => {
     playClickSound();
     if (tab === "pais" && !isParent) {
-      setPinInput("");
-      setPinError(false);
-      setIsPinModalOpen(true);
+      setActiveTab("hoje");
     } else {
       setActiveTab(tab);
     }
   };
 
-  const handlePinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pinInput === "1234") {
-      // Find david or fallback
-      const adminUser = users.find(u => u.username === "david") || {
-        role: "pai" as const,
-        name: "Pai (David)",
-        avatar: "👨‍💼",
-        username: "david"
-      };
-      setSession({
-        role: adminUser.role,
-        name: adminUser.name,
-        avatar: adminUser.avatar,
-        username: adminUser.username,
-        partnerName: "Beatriz"
-      });
-      setIsPinModalOpen(false);
-      setActiveTab("pais");
-    } else {
-      setPinError(true);
-      setPinInput("");
-    }
-  };
-
   if (!session) {
     return (
-      <div className="min-h-screen bg-slate-100 flex justify-center items-start py-0 md:py-8" id="app-root">
+      <div className="min-h-screen bg-gradient-to-br from-[#f3eae1] via-[#faf6f0] to-[#e6eaf3] flex justify-center items-start py-0 md:py-8" id="app-root">
         {/* Centered responsive tablet container */}
-        <div className="w-full max-w-[480px] md:max-w-[720px] lg:max-w-[800px] min-h-screen md:min-h-[850px] md:rounded-2xl bg-background shadow-2xl relative flex flex-col justify-center items-center p-6 border border-outline-variant/20 overflow-hidden transition-all duration-300">
+        <div className="w-full max-w-[480px] md:max-w-[720px] lg:max-w-[800px] min-h-screen md:min-h-[850px] md:rounded-2xl bg-background shadow-2xl relative flex flex-col justify-center items-center p-6 border border-outline-variant/15 overflow-hidden transition-all duration-300">
           <LoginScreen users={users} onLogin={(userSession) => {
             setSession(userSession);
             // If child logs in, default to "hoje" tab
@@ -687,15 +723,15 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 flex justify-center items-start py-0 md:py-8" id="app-root">
+    <div className="min-h-screen bg-gradient-to-br from-[#f3eae1] via-[#faf6f0] to-[#e6eaf3] flex justify-center items-start py-0 md:py-8" id="app-root">
       {/* Centered responsive tablet container */}
-      <div className="w-full max-w-[480px] md:max-w-[720px] lg:max-w-[800px] min-h-screen md:min-h-[850px] md:rounded-2xl bg-background shadow-2xl relative flex flex-col pb-28 border border-outline-variant/20 overflow-hidden transition-all duration-300">
+      <div className="w-full max-w-[480px] md:max-w-[720px] lg:max-w-[800px] min-h-screen md:min-h-[850px] md:rounded-2xl bg-background shadow-2xl relative flex flex-col pb-28 border border-outline-variant/15 overflow-hidden transition-all duration-300">
         
         {/* Top Header Bar */}
         <header className="sticky top-0 bg-background z-30 px-6 py-4 flex justify-between items-center border-b border-outline-variant/20 shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary font-black text-sm">
-              🎯
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center text-white shadow-md shadow-primary/15">
+              <Target className="w-5 h-5 animate-pulse" />
             </span>
             <div>
               <h1 className="font-bold text-base text-primary tracking-tight leading-none">
@@ -801,6 +837,7 @@ export default function App() {
               onUpdateReward={handleUpdateReward}
               onDeleteReward={handleDeleteReward}
               onResetMissions={handleResetMissions}
+              onRestoreDefaultMissions={handleRestoreDefaultMissions}
               onUpdateKidProfile={handleUpdateKidProfile}
               users={users}
               session={session}
@@ -856,90 +893,20 @@ export default function App() {
             <span className="text-[11px] font-label-lg leading-none">Evolução</span>
           </button>
 
-          <button
-            onClick={() => handleTabClick("pais")}
-            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 ${
-              activeTab === "pais"
-                ? "text-primary scale-105 font-bold"
-                : "text-on-surface-variant/70 hover:text-on-surface"
-            }`}
-          >
-            <PaisIcon active={activeTab === "pais"} />
-            <span className="text-[11px] font-label-lg leading-none">Pais</span>
-          </button>
-        </nav>
-
-        {/* PIN protection dialog modal */}
-        <AnimatePresence>
-          {isPinModalOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-40 p-6"
-              onClick={() => setIsPinModalOpen(false)}
+          {isParent && (
+            <button
+              onClick={() => handleTabClick("pais")}
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all duration-200 ${
+                activeTab === "pais"
+                  ? "text-primary scale-105 font-bold"
+                  : "text-on-surface-variant/70 hover:text-on-surface"
+              }`}
             >
-              <motion.div
-                initial={{ scale: 0.9, y: 20 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.9, y: 20 }}
-                className="bg-surface-container-lowest p-6 rounded-lg max-w-[320px] w-full shadow-2xl border border-outline-variant/30 text-center flex flex-col gap-4"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="w-12 h-12 bg-primary-fixed rounded-full flex items-center justify-center text-primary mx-auto">
-                  <Lock className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-on-surface">Painel dos Pais</h3>
-                  <p className="text-xs text-on-surface-variant mt-1">
-                    Digite a senha dos pais para acessar as configurações.
-                  </p>
-                  <p className="text-[10px] text-primary font-bold mt-1.5 bg-primary-fixed/30 py-1 rounded-full">
-                    Dica de Teste: a senha padrão é <strong>1234</strong>
-                  </p>
-                </div>
-
-                <form onSubmit={handlePinSubmit} className="flex flex-col gap-3">
-                  <input
-                    type="password"
-                    maxLength={4}
-                    value={pinInput}
-                    onChange={(e) => {
-                      setPinInput(e.target.value.replace(/\D/g, ""));
-                      setPinError(false);
-                    }}
-                    placeholder="••••"
-                    className={`bg-surface-container p-3 rounded-lg text-center tracking-widest text-2xl font-bold border-2 focus:bg-surface-container-lowest ${
-                      pinError ? "border-error focus:border-error" : "border-transparent focus:border-primary/40"
-                    }`}
-                    autoFocus
-                    required
-                  />
-
-                  {pinError && (
-                    <span className="text-xs text-error font-bold">Senha incorreta. Tente novamente!</span>
-                  )}
-
-                  <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      className="flex-1 bg-primary text-on-primary py-3 rounded-full font-label-lg text-xs chunky-button"
-                    >
-                      Entrar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsPinModalOpen(false)}
-                      className="flex-1 bg-surface-container text-on-surface-variant py-3 rounded-full font-label-lg text-xs chunky-button"
-                    >
-                      Voltar
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
-            </motion.div>
+              <PaisIcon active={activeTab === "pais"} />
+              <span className="text-[11px] font-label-lg leading-none">Pais</span>
+            </button>
           )}
-        </AnimatePresence>
+        </nav>
 
       </div>
     </div>

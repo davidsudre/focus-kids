@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A managed user of the app",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "avatar": { "type": "string" }
+      },
+      "required": ["id", "name", "role"]
+    },
+    "Mission": {
+      "title": "Mission",
+      "description": "A concentration or routine mission",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "points": { "type": "number" },
+        "icon": { "type": "string" },
+        "completed": { "type": "boolean" }
+      },
+      "required": ["id", "title", "points"]
+    },
+    "Reward": {
+      "title": "Reward",
+      "description": "A purchasable reward in the store",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "cost": { "type": "number" },
+        "icon": { "type": "string" },
+        "limit": { "type": "number" }
+      },
+      "required": ["id", "title", "cost"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "List of managed users"
+    },
+    "missions/{missionId}": {
+      "schema": "Mission",
+      "description": "Available missions"
+    },
+    "rewards/{rewardId}": {
+      "schema": "Reward",
+      "description": "Available rewards"
+    }
+  }
+}

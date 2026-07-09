@@ -1,0 +1,6 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "database": "ai-studio-focuskids-7fed3761-e5e7-4feb-bae9-94d1128e859e"
+  }
+}

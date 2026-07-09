@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { UserSession, ManagedUser } from "../types";
-import { Key, User, ShieldAlert, Sparkles, HelpCircle, AlertCircle, Mail, ArrowLeft, Send, CheckCircle2, Gamepad2, Trophy, Flame, Coins } from "lucide-react";
+import { Key, User, ShieldAlert, Sparkles, HelpCircle, AlertCircle, Mail, ArrowLeft, Send, CheckCircle2, Trophy, Flame, Coins, Target, X, Lightbulb } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { auth, db } from "../firebase";
 import { playClickSound, playPointsApprovedSound } from "../lib/sounds";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 
 interface LoginScreenProps {
@@ -17,6 +16,10 @@ type AuthMode = "login" | "signup" | "forgot";
 export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
   // Mode of the Auth panel
   const [mode, setMode] = useState<AuthMode>("login");
+
+  // Tooltip states
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   // Input states
   const [usernameOrEmail, setUsernameOrEmail] = useState("");
@@ -38,71 +41,26 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
   const [loading, setLoading] = useState(false);
 
   // Handle standard Username login OR Firebase Email login
+  // Handle standard Username or Email login via Firestore-synchronized user records
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setLoading(true);
 
-    const input = usernameOrEmail.trim();
+    const input = usernameOrEmail.trim().toLowerCase();
+    const inputPrefix = input.includes("@") ? input.split("@")[0] : input;
 
-    // 1. Detect if it's an email address
-    if (input.includes("@")) {
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, input, password);
-        const fbUser = userCredential.user;
+    // Look up the user in our reactive users list with extreme robustness
+    const foundUser = users.find(
+      u => (u.username && u.username.trim().toLowerCase() === input) || 
+           (u.email && u.email.trim().toLowerCase() === input) ||
+           (u.username && u.username.trim().toLowerCase() === inputPrefix) ||
+           (u.email && u.email.trim().toLowerCase().split("@")[0] === inputPrefix) ||
+           (u.id && u.id.toLowerCase() === input)
+    );
 
-        // Try to find matching ManagedUser in the list
-        const foundUser = users.find(u => u.id === fbUser.uid || u.username.toLowerCase() === fbUser.email?.toLowerCase());
-
-        if (foundUser) {
-          onLogin({
-            role: foundUser.role,
-            name: foundUser.name,
-            avatar: foundUser.avatar,
-            username: foundUser.username,
-            partnerName: users.find(u => u.id !== foundUser.id && (u.role === "pai" || u.role === "mae"))?.name || undefined
-          });
-        } else {
-          // If not in firestore list but successfully authenticated in Firebase Auth, auto-create their Firestore record
-          const username = fbUser.email?.split("@")[0] || "usuario";
-          const newManagedUser: ManagedUser = {
-            id: fbUser.uid,
-            username: username,
-            name: fbUser.displayName || username,
-            password: "firebase_auth",
-            role: "pai",
-            avatar: "👨‍💼"
-          };
-
-          // Save to firestore
-          await setDoc(doc(db, "users", fbUser.uid), newManagedUser);
-
-          playPointsApprovedSound();
-          onLogin({
-            role: "pai",
-            name: newManagedUser.name,
-            avatar: newManagedUser.avatar,
-            username: newManagedUser.username
-          });
-        }
-      } catch (err: any) {
-        console.error("Firebase Login Error:", err);
-        if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
-          setErrorMsg("E-mail ou senha incorretos.");
-        } else if (err.code === "auth/invalid-email") {
-          setErrorMsg("Formato de e-mail inválido.");
-        } else {
-          setErrorMsg("Erro ao fazer login. Verifique sua conexão.");
-        }
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      // 2. Treat as standard offline/Firestore local credential
-      const cleanUser = input.toLowerCase();
-      const foundUser = users.find(u => u.username.trim().toLowerCase() === cleanUser);
-
-      if (foundUser && foundUser.password === password) {
+    if (foundUser) {
+      if (foundUser.password === password) {
         let partnerName = "";
         if (foundUser.role === "pai" || foundUser.role === "mae") {
           const otherParent = users.find(
@@ -121,44 +79,59 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
         });
         setLoading(false);
       } else {
-        setErrorMsg("Usuário ou senha incorretos.");
+        setErrorMsg("Senha incorreta.");
         setLoading(false);
       }
+    } else {
+      setErrorMsg("Usuário não encontrado.");
+      setLoading(false);
     }
   };
 
-  // Handle Firebase Email SignUp
+  // Handle custom signup directly inside Firestore (uniquely keys on username)
   const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setLoading(true);
 
-    if (!regName.trim() || !regEmail.trim() || !regPassword.trim()) {
+    const name = regName.trim();
+    const email = regEmail.trim();
+    const cleanPassword = regPassword.trim();
+
+    if (!name || !email || !cleanPassword) {
       setErrorMsg("Por favor, preencha todos os campos.");
       setLoading(false);
       return;
     }
 
-    try {
-      // 1. Create User in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, regEmail.trim(), regPassword);
-      const fbUser = userCredential.user;
+    const username = email.includes("@") ? email.split("@")[0].toLowerCase() : email.toLowerCase();
 
-      // 2. Store user document in Firestore users collection
-      const username = regEmail.trim().split("@")[0];
+    // Check if username already exists
+    const userExists = users.some(
+      u => u.username.trim().toLowerCase() === username
+    );
+
+    if (userExists) {
+      setErrorMsg("Este usuário já está cadastrado.");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const newId = "u_" + Math.random().toString(36).substring(2, 11);
       const newManagedUser: ManagedUser = {
-        id: fbUser.uid,
+        id: newId,
         username: username,
-        name: regName.trim(),
-        password: "firebase_auth",
+        email: email.toLowerCase(),
+        name: name,
+        password: cleanPassword,
         role: regRole,
         avatar: regAvatar
       };
 
-      await setDoc(doc(db, "users", fbUser.uid), newManagedUser);
+      await setDoc(doc(db, "users", newId), newManagedUser);
 
       playPointsApprovedSound();
-      // 3. Login session
       onLogin({
         role: regRole,
         name: newManagedUser.name,
@@ -166,44 +139,34 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
         username: newManagedUser.username
       });
     } catch (err: any) {
-      console.error("Firebase Sign Up Error:", err);
-      if (err.code === "auth/email-already-in-use") {
-        setErrorMsg("Este e-mail já está sendo utilizado.");
-      } else if (err.code === "auth/weak-password") {
-        setErrorMsg("A senha precisa ter pelo menos 6 caracteres.");
-      } else {
-        setErrorMsg("Erro ao cadastrar conta. Tente novamente.");
-      }
+      console.error("Firestore Sign Up Error:", err);
+      setErrorMsg("Erro ao cadastrar conta no banco de dados. Tente novamente.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Send Password Reset Email
+  // Handle recovery: in a family app with visible/stored passwords, remind the user or instruct them to talk to parents
   const handleRecoverySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setLoading(true);
 
     if (!recoveryEmail.trim()) {
-      setErrorMsg("Por favor, preencha o e-mail.");
+      setErrorMsg("Por favor, preencha o usuário.");
       setLoading(false);
       return;
     }
 
-    try {
-      await sendPasswordResetEmail(auth, recoveryEmail.trim());
+    const input = recoveryEmail.trim().toLowerCase();
+    const foundUser = users.find(
+      u => u.username.trim().toLowerCase() === input
+    );
+
+    if (foundUser) {
       setRecoverySent(true);
-    } catch (err: any) {
-      console.error("Password recovery error:", err);
-      if (err.code === "auth/user-not-found") {
-        setErrorMsg("Não encontramos nenhuma conta com este e-mail.");
-      } else if (err.code === "auth/invalid-email") {
-        setErrorMsg("Por favor, digite um e-mail válido.");
-      } else {
-        setErrorMsg("Erro ao enviar e-mail de recuperação. Tente novamente.");
-      }
-    } finally {
+    } else {
+      setErrorMsg("Nenhum usuário correspondente foi encontrado.");
       setLoading(false);
     }
   };
@@ -213,16 +176,16 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
       {/* Branding Header */}
       <div className="text-center mb-6 flex flex-col items-center gap-2">
         <div className="relative group">
-          <div className="absolute -inset-1.5 rounded-2xl bg-gradient-to-r from-primary via-purple-500 to-tertiary opacity-75 blur-md group-hover:opacity-100 transition duration-1000 animate-pulse"></div>
-          <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center text-4xl shadow-[0_4px_15px_rgba(124,58,237,0.4)]">
-            🎮
+          <div className="absolute -inset-1.5 rounded-2xl bg-gradient-to-r from-primary via-indigo-500 to-purple-600 opacity-75 blur-md group-hover:opacity-100 transition duration-1000 animate-pulse"></div>
+          <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center text-white shadow-[0_4px_15px_rgba(0,96,172,0.3)]">
+            <Target className="w-8 h-8 animate-spin-slow" />
           </div>
         </div>
-        <h1 className="text-3xl font-black bg-gradient-to-r from-primary via-indigo-600 to-purple-600 bg-clip-text text-transparent tracking-tight leading-none mt-3 flex items-center gap-1.5 justify-center">
-          Focus Kids <span className="text-xs bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider shadow-sm select-none">v2.0</span>
+        <h1 className="text-3xl font-black bg-gradient-to-r from-primary via-indigo-600 to-purple-600 bg-clip-text text-transparent tracking-tight leading-none mt-3">
+          Focus Kids
         </h1>
         <p className="text-xs text-on-surface-variant font-extrabold mt-1 text-center max-w-[340px] leading-relaxed">
-          🏆 Seu Portal de Missões, Pontos e Prêmios Épicos! 🚀✨
+          🎯 Seu Portal de Concentração, Missões e Conquistas! ✨🚀
         </p>
       </div>
 
@@ -232,7 +195,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
         <div className="flex justify-center -mt-10 mb-6 select-none">
           {mode === "login" ? (
             <span className="bg-gradient-to-r from-primary to-purple-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-md flex items-center gap-1.5 border-2 border-white">
-              <Gamepad2 className="w-3.5 h-3.5" /> Portal de Entrada
+              <Target className="w-3.5 h-3.5" /> Arena de Foco
             </span>
           ) : mode === "signup" ? (
             <span className="bg-gradient-to-r from-teal-500 to-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-md flex items-center gap-1.5 border-2 border-white">
@@ -263,9 +226,53 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
 
               <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant mb-1.5">
-                    Usuário ou E-mail
-                  </label>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
+                      Usuário ou E-mail
+                    </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowTooltip(!showTooltip)}
+                        onMouseEnter={() => setShowTooltip(true)}
+                        onMouseLeave={() => setShowTooltip(false)}
+                        className="text-primary hover:text-purple-600 transition-colors p-0.5 flex items-center justify-center rounded-full bg-primary/5 hover:bg-primary/10"
+                        title="Ajuda com as Contas"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5 cursor-help" />
+                      </button>
+                      
+                      <AnimatePresence>
+                        {showTooltip && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                            className="absolute right-0 bottom-6 w-72 bg-inverse-surface text-inverse-on-surface p-4 rounded-xl shadow-xl border border-white/10 text-xs z-50 leading-relaxed font-semibold"
+                          >
+                            <div className="flex items-center gap-1.5 mb-2 text-primary-fixed font-black">
+                              <Sparkles className="w-4 h-4 text-yellow-300" />
+                              <span>Formato do Campo:</span>
+                            </div>
+                            <p className="text-[11px] mb-2 leading-relaxed">
+                              Você pode entrar digitando seu nome de usuário simples ou o endereço de e-mail cadastrado.
+                            </p>
+                            <ul className="space-y-1.5 text-[11px] text-inverse-on-surface/90">
+                              <li className="flex items-center gap-1.5">
+                                <span className="text-yellow-300">👦 Filho:</span> Primeiro nome em minúsculo (ex: <strong className="bg-white/15 px-1 py-0.5 rounded text-white font-mono">nome</strong>)
+                              </li>
+                              <li className="flex items-center gap-1.5">
+                                <span className="text-teal-300">👨‍👩‍👦 Pais:</span> Nome de usuário ou e-mail cadastrado (ex: <strong className="bg-white/15 px-1 py-0.5 rounded text-white font-mono">pais</strong> ou <strong className="bg-white/15 px-1 py-0.5 rounded text-white font-mono">pais@exemplo.com</strong>)
+                              </li>
+                            </ul>
+                            <div className="border-t border-white/10 mt-2.5 pt-2 text-[10px] text-inverse-on-surface/80">
+                              💡 Peça aos pais para criarem ou alterarem seu usuário no Painel de Controle se necessário.
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
                   <div className="relative">
                     <div className="absolute left-3 top-2.5 w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                       <User className="w-4 h-4" />
@@ -277,7 +284,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                         setUsernameOrEmail(e.target.value);
                         setErrorMsg(null);
                       }}
-                      placeholder="Ex: bernardo, david ou email@exemplo.com"
+                      placeholder="Digite seu usuário ou e-mail cadastrado"
                       className="w-full bg-surface-container pl-12 pr-4 py-3 rounded-xl text-sm border-2 border-transparent focus:border-primary/40 focus:bg-white outline-none transition-all text-on-surface font-semibold placeholder:text-on-surface-variant/40"
                       required
                       autoFocus
@@ -326,7 +333,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-primary via-indigo-600 to-purple-600 hover:from-primary/95 hover:to-purple-600/95 text-white py-3.5 rounded-full font-black text-xs uppercase tracking-wider mt-2 shadow-[0_4px_15px_rgba(124,58,237,0.3)] hover:scale-[1.02] active:scale-98 hover:shadow-[0_6px_20px_rgba(124,58,237,0.4)] transition-all duration-200 flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-primary via-indigo-600 to-purple-600 hover:from-primary/95 hover:to-purple-600/95 text-white py-3.5 rounded-full font-black text-xs uppercase tracking-wider mt-1 shadow-[0_4px_15px_rgba(124,58,237,0.3)] hover:scale-[1.02] active:scale-98 hover:shadow-[0_6px_20px_rgba(124,58,237,0.4)] transition-all duration-200 flex items-center justify-center gap-2"
                 >
                   <Flame className="w-4 h-4 text-yellow-300 animate-bounce shrink-0" />
                   {loading ? "Carregando Arena..." : "Iniciar Jornada 🚀"}
@@ -474,7 +481,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                   disabled={loading}
                   className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white py-3.5 rounded-full font-black text-xs uppercase tracking-wider mt-2 shadow-[0_4px_15px_rgba(20,184,166,0.3)] hover:scale-[1.02] active:scale-98 transition-all"
                 >
-                  {loading ? "Criando Avatar..." : "Concluir Cadastro 🎮"}
+                  {loading ? "Criando Avatar..." : "Concluir Cadastro 🎯"}
                 </button>
               </form>
             </motion.div>
@@ -507,17 +514,17 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                 <form onSubmit={handleRecoverySubmit} className="flex flex-col gap-4">
                   <div>
                     <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant mb-1.5">
-                      Seu E-mail Cadastrado
+                      Nome de Usuário Cadastrado
                     </label>
                     <div className="relative">
                       <div className="absolute left-3 top-2.5 w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600">
-                        <Mail className="w-4 h-4" />
+                        <User className="w-4 h-4" />
                       </div>
                       <input
-                        type="email"
+                        type="text"
                         value={recoveryEmail}
                         onChange={(e) => setRecoveryEmail(e.target.value)}
-                        placeholder="seuemail@exemplo.com"
+                        placeholder="Ex: bernardo"
                         className="w-full bg-surface-container pl-12 pr-4 py-3 rounded-xl text-sm border-2 border-transparent focus:border-primary/40 focus:bg-white outline-none transition-all text-on-surface font-semibold placeholder:text-on-surface-variant/40"
                         required
                         autoFocus
@@ -538,7 +545,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                     className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3.5 rounded-full font-black text-xs uppercase tracking-wider mt-2 shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:scale-[1.02] active:scale-98 transition-all flex items-center justify-center gap-2"
                   >
                     <Send className="w-4 h-4" />
-                    {loading ? "Enviando..." : "Enviar Link de Acesso"}
+                    {loading ? "Verificando..." : "Verificar Usuário"}
                   </button>
                 </form>
               ) : (
@@ -547,9 +554,9 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                     <CheckCircle2 className="w-8 h-8 text-emerald-500" />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <h4 className="font-bold text-on-surface text-sm">Link Enviado com Sucesso!</h4>
-                    <p className="text-xs text-on-surface-variant leading-relaxed">
-                      Verifique sua caixa de entrada e a pasta de spam do e-mail <strong>{recoveryEmail}</strong> para redefinir sua senha.
+                    <h4 className="font-bold text-on-surface text-sm">Usuário Confirmado!</h4>
+                    <p className="text-xs text-on-surface-variant leading-relaxed px-2">
+                      Sua conta de usuário <strong>{recoveryEmail}</strong> está registrada no sistema. Como este é um portal familiar privado, fale com seu pai (David) ou sua mãe (Beatriz) para verificar ou alterar sua senha diretamente no painel de controle deles!
                     </p>
                   </div>
                   <button
@@ -566,31 +573,117 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
         </AnimatePresence>
       </div>
 
-      {/* How it works Game Quest Board */}
-      <div className="w-full mt-6 bg-gradient-to-br from-indigo-500/5 via-purple-500/5 to-pink-500/5 border border-purple-100 rounded-2xl p-4 flex gap-3.5 items-start shadow-sm">
-        <div className="bg-gradient-to-tr from-purple-500 to-pink-500 p-2.5 rounded-xl text-white shrink-0 shadow-md">
-          <Trophy className="w-4 h-4 text-yellow-300" />
-        </div>
-        <div className="flex-1">
-          <h4 className="text-xs font-black uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
-            Como Funciona a sua Jornada:
-          </h4>
-          <ul className="text-[11px] text-on-surface-variant font-semibold mt-2.5 space-y-2 list-none pl-0">
-            <li className="flex items-start gap-2">
-              <span className="text-primary mt-0.5 shrink-0 text-sm">⚡</span>
-              <span><strong>Complete Missões:</strong> Faça suas tarefas diárias, rotinas e estudos para acumular progresso.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-purple-600 mt-0.5 shrink-0 text-sm">🪙</span>
-              <span><strong>Ganhe Pontos:</strong> Peça a aprovação dos pais no painel deles para coletar suas moedas de ouro.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-pink-500 mt-0.5 shrink-0 text-sm">🎁</span>
-              <span><strong>Resgate Prêmios:</strong> Troque suas moedas por tempo de tela, lanches e passeios incríveis!</span>
-            </li>
-          </ul>
-        </div>
+      {/* Interactive "Como funciona" Button */}
+      <div className="mt-6 flex flex-col items-center">
+        <button
+          type="button"
+          onClick={() => {
+            playClickSound();
+            setShowHowItWorks(true);
+          }}
+          className="text-xs font-black text-primary/80 hover:text-primary flex items-center gap-1.5 px-4 py-2.5 bg-primary/5 hover:bg-primary/10 rounded-full transition-all border border-primary/10 hover:border-primary/20 shadow-sm"
+        >
+          <Lightbulb className="w-3.5 h-3.5 text-yellow-500 animate-pulse" /> Como funciona nossa jornada?
+        </button>
       </div>
+
+      {/* Modern Dialog Modal for Journey Information */}
+      <AnimatePresence>
+        {showHowItWorks && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" id="how-it-works-modal">
+            {/* Dark glass backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowHowItWorks(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+
+            {/* Content Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 15 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="relative w-full max-w-[420px] bg-surface-container-lowest p-6 rounded-3xl border-2 border-primary/20 shadow-2xl z-10 overflow-hidden"
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  setShowHowItWorks(false);
+                }}
+                className="absolute top-4 right-4 text-on-surface-variant hover:text-on-surface p-1.5 bg-surface-container hover:bg-surface-container-high rounded-full transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex flex-col items-center text-center mt-2">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-400 to-yellow-500 flex items-center justify-center text-white shadow-lg shadow-yellow-500/20 mb-3 select-none">
+                  <Trophy className="w-7 h-7 text-white" />
+                </div>
+                <h3 className="text-lg font-black text-on-surface tracking-tight">
+                  Como Funciona sua Jornada!
+                </h3>
+                <p className="text-xs text-on-surface-variant max-w-[280px] mt-1 font-semibold">
+                  Um portal divertido de hábitos e incentivos para toda a família!
+                </p>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div className="flex gap-3 items-start p-3 rounded-2xl bg-primary/5 border border-primary/10">
+                  <span className="text-xl p-1.5 bg-primary/10 rounded-xl">⚡</span>
+                  <div>
+                    <h4 className="text-xs font-black text-primary uppercase tracking-wider">
+                      1. Complete Missões
+                    </h4>
+                    <p className="text-[11px] text-on-surface-variant font-semibold mt-0.5 leading-relaxed">
+                      Faça suas tarefas diárias, dever de casa e hábitos de organização para acumular conquistas.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 items-start p-3 rounded-2xl bg-purple-500/5 border border-purple-500/10">
+                  <span className="text-xl p-1.5 bg-purple-500/10 rounded-xl">🪙</span>
+                  <div>
+                    <h4 className="text-xs font-black text-purple-700 uppercase tracking-wider">
+                      2. Ganhe Moedas de Ouro
+                    </h4>
+                    <p className="text-[11px] text-on-surface-variant font-semibold mt-0.5 leading-relaxed">
+                      Os pais avaliam e aprovam suas conclusões no Painel deles. Se tudo estiver certo, você ganha seus pontos!
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 items-start p-3 rounded-2xl bg-pink-500/5 border border-pink-500/10">
+                  <span className="text-xl p-1.5 bg-pink-500/10 rounded-xl">🎁</span>
+                  <div>
+                    <h4 className="text-xs font-black text-pink-700 uppercase tracking-wider">
+                      3. Resgate Prêmios Épicos
+                    </h4>
+                    <p className="text-[11px] text-on-surface-variant font-semibold mt-0.5 leading-relaxed">
+                      Troque suas moedas por recompensas incríveis escolhidas pelos pais: tempo de tela, lanches ou passeios especiais!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  setShowHowItWorks(false);
+                }}
+                className="w-full mt-6 bg-gradient-to-r from-primary to-purple-600 hover:opacity-95 text-white py-3 rounded-full font-black text-xs uppercase tracking-wider shadow-md hover:scale-[1.01] active:scale-98 transition-all"
+              >
+                Entendi, Vamos Começar! 🎯
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

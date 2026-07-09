@@ -9,10 +9,11 @@ const firebaseConfig = {
   projectId: "gen-lang-client-0289271537",
   storageBucket: "gen-lang-client-0289271537.firebasestorage.app",
   messagingSenderId: "957630410803",
-  appId: "1:957630410803:web:914a7e10344bfb3b1c7346"
+  appId: "1:957630410803:web:914a7e10344bfb3b1c7346",
+  firestoreDatabaseId: "ai-studio-focuskids-7fed3761-e5e7-4feb-bae9-94d1128e859e"
 };
 
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);

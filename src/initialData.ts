@@ -159,8 +159,8 @@ export const DEFAULT_REWARDS: Reward[] = [
 
 export const DEFAULT_PROFILE: KidProfile = {
   name: "Bernardo",
-  currentPoints: 210,
-  streak: 5,
-  totalPointsAllTime: 1240,
+  currentPoints: 0,
+  streak: 0,
+  totalPointsAllTime: 0,
   avatar: "🧑‍🚀" // Space Explorer avatar! Kids love it.
 };
