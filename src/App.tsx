@@ -11,6 +11,13 @@ import { Calendar, Award, BarChart3, ShieldCheck, HelpCircle, Key, Lock, Sparkle
 import { motion, AnimatePresence } from "motion/react";
 import { collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import { 
+  playClickSound, 
+  playSubtaskPopSound, 
+  playMissionSuccessSound, 
+  playPointsApprovedSound, 
+  playRewardClaimedSound 
+} from "./lib/sounds";
 
 export default function App() {
   // Navigation State
@@ -272,6 +279,11 @@ export default function App() {
       const allCompleted = updatedSubtasks.every(v => v === true);
       if (allCompleted) {
         await logActivity("mission_completed", `Concluiu todas as etapas da missão "${mission.title}"! 🎉 (Aguardando aprovação)`, 0, mission.icon);
+        playMissionSuccessSound();
+      } else if (updatedSubtasks[subtaskIndex]) {
+        playSubtaskPopSound();
+      } else {
+        playClickSound();
       }
       try {
         await updateDoc(doc(db, "missions", missionId), {
@@ -326,6 +338,7 @@ export default function App() {
           completed: true,
           completedAt: new Date().toISOString()
         });
+        playMissionSuccessSound();
         setSyncStatus("synced");
       } catch (e) {
         setSyncStatus("error");
@@ -362,6 +375,7 @@ export default function App() {
           });
         }
         await logActivity("points_added", `Aprovou +${req.points} pts de Bernardo para a missão "${req.missionTitle}" de ${formatLocalDate(req.date)}`, req.points, req.missionIcon);
+        playPointsApprovedSound();
         setSyncStatus("synced");
       } catch (e) {
         setSyncStatus("error");
@@ -416,6 +430,7 @@ export default function App() {
           };
           await setDoc(doc(db, "redemptions", newRedemption.id), newRedemption);
           await logActivity("reward_claimed", `Resgatou o prêmio: "${reward.title}"! 🎁`, -cost, reward.icon);
+          playRewardClaimedSound();
           setSyncStatus("synced");
         } catch (e) {
           setSyncStatus("error");
@@ -592,6 +607,7 @@ export default function App() {
 
   // Security gate for parent tab
   const handleTabClick = (tab: typeof activeTab) => {
+    playClickSound();
     if (tab === "pais" && !isParent) {
       setPinInput("");
       setPinError(false);

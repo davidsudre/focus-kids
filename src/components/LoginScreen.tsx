@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { UserSession, ManagedUser } from "../types";
-import { Key, User, ShieldAlert, Sparkles, HelpCircle, AlertCircle, Mail, ArrowLeft, Send, CheckCircle2 } from "lucide-react";
+import { Key, User, ShieldAlert, Sparkles, HelpCircle, AlertCircle, Mail, ArrowLeft, Send, CheckCircle2, Gamepad2, Trophy, Flame, Coins } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { auth, db } from "../firebase";
+import { playClickSound, playPointsApprovedSound } from "../lib/sounds";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 
@@ -76,6 +77,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
           // Save to firestore
           await setDoc(doc(db, "users", fbUser.uid), newManagedUser);
 
+          playPointsApprovedSound();
           onLogin({
             role: "pai",
             name: newManagedUser.name,
@@ -109,6 +111,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
           partnerName = otherParent ? otherParent.name : "";
         }
 
+        playPointsApprovedSound();
         onLogin({
           role: foundUser.role,
           name: foundUser.name,
@@ -154,6 +157,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
 
       await setDoc(doc(db, "users", fbUser.uid), newManagedUser);
 
+      playPointsApprovedSound();
       // 3. Login session
       onLogin({
         role: regRole,
@@ -208,19 +212,39 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
     <div className="w-full max-w-[400px] py-4 flex flex-col justify-center items-center animate-fade-in" id="login-container">
       {/* Branding Header */}
       <div className="text-center mb-6 flex flex-col items-center gap-2">
-        <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-4xl shadow-md">
-          🎯
+        <div className="relative group">
+          <div className="absolute -inset-1.5 rounded-2xl bg-gradient-to-r from-primary via-purple-500 to-tertiary opacity-75 blur-md group-hover:opacity-100 transition duration-1000 animate-pulse"></div>
+          <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center text-4xl shadow-[0_4px_15px_rgba(124,58,237,0.4)]">
+            🎮
+          </div>
         </div>
-        <h1 className="text-3xl font-black text-primary tracking-tight leading-none mt-2">
-          Focus Kids
+        <h1 className="text-3xl font-black bg-gradient-to-r from-primary via-indigo-600 to-purple-600 bg-clip-text text-transparent tracking-tight leading-none mt-3 flex items-center gap-1.5 justify-center">
+          Focus Kids <span className="text-xs bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-2 py-0.5 rounded-full font-black uppercase tracking-wider shadow-sm select-none">v2.0</span>
         </h1>
-        <p className="text-xs text-on-surface-variant font-semibold mt-1">
-          Plataforma de Foco e Sincronização em Nuvem ☁️
+        <p className="text-xs text-on-surface-variant font-extrabold mt-1 text-center max-w-[340px] leading-relaxed">
+          🏆 Seu Portal de Missões, Pontos e Prêmios Épicos! 🚀✨
         </p>
       </div>
 
       {/* Main Login / Registration Card */}
-      <div className="w-full bg-surface-container-lowest p-6 rounded-2xl border-2 border-outline-variant/30 shadow-sm relative">
+      <div className="w-full bg-surface-container-lowest p-6 rounded-2xl border-2 border-primary/20 shadow-[0_10px_35px_rgba(124,58,237,0.06)] relative overflow-visible">
+        {/* Top Floating Badge */}
+        <div className="flex justify-center -mt-10 mb-6 select-none">
+          {mode === "login" ? (
+            <span className="bg-gradient-to-r from-primary to-purple-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-md flex items-center gap-1.5 border-2 border-white">
+              <Gamepad2 className="w-3.5 h-3.5" /> Portal de Entrada
+            </span>
+          ) : mode === "signup" ? (
+            <span className="bg-gradient-to-r from-teal-500 to-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-md flex items-center gap-1.5 border-2 border-white">
+              <User className="w-3.5 h-3.5" /> Cadastro dos Pais
+            </span>
+          ) : (
+            <span className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-md flex items-center gap-1.5 border-2 border-white">
+              <HelpCircle className="w-3.5 h-3.5" /> Recuperação
+            </span>
+          )}
+        </div>
+
         <AnimatePresence mode="wait">
           {mode === "login" && (
             <motion.div
@@ -230,20 +254,22 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
               exit={{ opacity: 0, x: 10 }}
               transition={{ duration: 0.15 }}
             >
-              <h2 className="text-lg font-bold text-on-surface mb-1 text-center">
+              <h2 className="text-base font-black text-on-surface mb-1 text-center">
                 Entrar na Conta
               </h2>
-              <p className="text-xs text-on-surface-variant text-center mb-5">
-                Digite seu usuário, ou e-mail dos pais para sincronizar
+              <p className="text-[11px] text-on-surface-variant text-center mb-5 font-medium">
+                Digite seu usuário ou o e-mail dos pais para sincronizar
               </p>
 
               <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-on-surface-variant mb-1.5">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant mb-1.5">
                     Usuário ou E-mail
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-3.5 w-4 h-4 text-on-surface-variant/70" />
+                    <div className="absolute left-3 top-2.5 w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                      <User className="w-4 h-4" />
+                    </div>
                     <input
                       type="text"
                       value={usernameOrEmail}
@@ -251,8 +277,8 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                         setUsernameOrEmail(e.target.value);
                         setErrorMsg(null);
                       }}
-                      placeholder="Ex: david, bernardo ou email@exemplo.com"
-                      className="w-full bg-surface-container pl-10 pr-4 py-3 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none transition-all text-on-surface font-medium placeholder:text-on-surface-variant/50"
+                      placeholder="Ex: bernardo, david ou email@exemplo.com"
+                      className="w-full bg-surface-container pl-12 pr-4 py-3 rounded-xl text-sm border-2 border-transparent focus:border-primary/40 focus:bg-white outline-none transition-all text-on-surface font-semibold placeholder:text-on-surface-variant/40"
                       required
                       autoFocus
                     />
@@ -261,19 +287,21 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
 
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
-                    <label className="block text-[11px] font-black uppercase tracking-wider text-on-surface-variant">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant">
                       Senha de Acesso
                     </label>
                     <button
                       type="button"
                       onClick={() => { setMode("forgot"); setErrorMsg(null); }}
-                      className="text-[10px] font-bold text-primary hover:underline"
+                      className="text-[10px] font-extrabold text-primary hover:underline"
                     >
-                      Esqueceu a Senha?
+                      Esqueceu?
                     </button>
                   </div>
                   <div className="relative">
-                    <Key className="absolute left-3 top-3.5 w-4 h-4 text-on-surface-variant/70" />
+                    <div className="absolute left-3 top-2.5 w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-600">
+                      <Key className="w-4 h-4" />
+                    </div>
                     <input
                       type="password"
                       value={password}
@@ -281,8 +309,8 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                         setPassword(e.target.value);
                         setErrorMsg(null);
                       }}
-                      placeholder="••••"
-                      className="w-full bg-surface-container pl-10 pr-4 py-3 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none transition-all text-on-surface font-medium placeholder:text-on-surface-variant/50 tracking-wider"
+                      placeholder="Sua senha de login"
+                      className="w-full bg-surface-container pl-12 pr-4 py-3 rounded-xl text-sm border-2 border-transparent focus:border-primary/40 focus:bg-white outline-none transition-all text-on-surface font-semibold placeholder:text-on-surface-variant/40 tracking-wider"
                       required
                     />
                   </div>
@@ -298,17 +326,18 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-primary text-on-primary py-3.5 rounded-full font-bold text-sm tracking-wide mt-2 shadow-sm hover:scale-[1.01] active:scale-95 transition-all chunky-button flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-primary via-indigo-600 to-purple-600 hover:from-primary/95 hover:to-purple-600/95 text-white py-3.5 rounded-full font-black text-xs uppercase tracking-wider mt-2 shadow-[0_4px_15px_rgba(124,58,237,0.3)] hover:scale-[1.02] active:scale-98 hover:shadow-[0_6px_20px_rgba(124,58,237,0.4)] transition-all duration-200 flex items-center justify-center gap-2"
                 >
-                  {loading ? "Acessando..." : "Acessar Sistema"}
+                  <Flame className="w-4 h-4 text-yellow-300 animate-bounce shrink-0" />
+                  {loading ? "Carregando Arena..." : "Iniciar Jornada 🚀"}
                 </button>
 
                 <div className="border-t border-outline-variant/30 mt-3 pt-3 text-center">
-                  <span className="text-xs text-on-surface-variant font-medium">Conta de E-mail para os Pais? </span>
+                  <span className="text-xs text-on-surface-variant font-semibold">Conta de e-mail para os pais? </span>
                   <button
                     type="button"
                     onClick={() => { setMode("signup"); setErrorMsg(null); }}
-                    className="text-xs font-bold text-primary hover:underline"
+                    className="text-xs font-black text-primary hover:underline"
                   >
                     Cadastre-se aqui
                   </button>
@@ -333,16 +362,16 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                 <ArrowLeft className="w-4 h-4" /> Voltar
               </button>
 
-              <h2 className="text-lg font-bold text-on-surface mb-1 text-center mt-4">
+              <h2 className="text-base font-black text-on-surface mb-1 text-center mt-4">
                 Criar Conta dos Pais
               </h2>
-              <p className="text-xs text-on-surface-variant text-center mb-5">
-                Crie um login seguro de e-mail no Firebase para sincronização
+              <p className="text-[11px] text-on-surface-variant text-center mb-5 font-semibold">
+                Crie um login seguro de e-mail para sincronizar a rotina
               </p>
 
               <form onSubmit={handleSignUpSubmit} className="flex flex-col gap-3.5">
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-on-surface-variant mb-1">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant mb-1">
                     Seu Nome Completo
                   </label>
                   <input
@@ -350,40 +379,44 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
                     placeholder="Ex: David, Beatriz"
-                    className="w-full bg-surface-container px-4 py-2.5 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none transition-all text-on-surface font-medium"
+                    className="w-full bg-surface-container px-4 py-2.5 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none transition-all text-on-surface font-semibold"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-on-surface-variant mb-1">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant mb-1">
                     E-mail
                   </label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3 w-4 h-4 text-on-surface-variant/70" />
+                    <div className="absolute left-3 top-2 w-7 h-7 rounded-lg bg-teal-500/10 flex items-center justify-center text-teal-600">
+                      <Mail className="w-4 h-4" />
+                    </div>
                     <input
                       type="email"
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
                       placeholder="seuemail@exemplo.com"
-                      className="w-full bg-surface-container pl-10 pr-4 py-2.5 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none transition-all text-on-surface font-medium"
+                      className="w-full bg-surface-container pl-12 pr-4 py-2.5 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none transition-all text-on-surface font-semibold"
                       required
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-black uppercase tracking-wider text-on-surface-variant mb-1">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant mb-1">
                     Definir Senha
                   </label>
                   <div className="relative">
-                    <Key className="absolute left-3 top-3 w-4 h-4 text-on-surface-variant/70" />
+                    <div className="absolute left-3 top-2 w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+                      <Key className="w-4 h-4" />
+                    </div>
                     <input
                       type="password"
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
                       placeholder="Mínimo 6 caracteres"
-                      className="w-full bg-surface-container pl-10 pr-4 py-2.5 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none transition-all text-on-surface font-medium tracking-wider"
+                      className="w-full bg-surface-container pl-12 pr-4 py-2.5 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none transition-all text-on-surface font-semibold tracking-wider"
                       required
                     />
                   </div>
@@ -391,7 +424,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-black uppercase tracking-wider text-on-surface-variant mb-1">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant mb-1">
                       Responsável
                     </label>
                     <select
@@ -401,7 +434,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                         setRegRole(val);
                         setRegAvatar(val === "pai" ? "👨‍💼" : "👩‍💼");
                       }}
-                      className="w-full bg-surface-container px-3 py-2.5 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none text-on-surface font-semibold"
+                      className="w-full bg-surface-container px-3 py-2.5 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none text-on-surface font-bold"
                     >
                       <option value="pai">Pai</option>
                       <option value="mae">Mãe</option>
@@ -409,7 +442,7 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-black uppercase tracking-wider text-on-surface-variant mb-1">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant mb-1">
                       Ícone Avatar
                     </label>
                     <div className="flex gap-2 justify-center items-center h-10 bg-surface-container rounded-xl">
@@ -418,8 +451,8 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                           key={emoji}
                           type="button"
                           onClick={() => setRegAvatar(emoji)}
-                          className={`text-xl p-1.5 rounded-lg transition-all ${
-                            regAvatar === emoji ? "bg-primary/20 scale-110" : "opacity-60 hover:opacity-100"
+                          className={`text-xl p-1 rounded-lg transition-all ${
+                            regAvatar === emoji ? "bg-teal-500/20 scale-110" : "opacity-60 hover:opacity-100"
                           }`}
                         >
                           {emoji}
@@ -439,9 +472,9 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-primary text-on-primary py-3.5 rounded-full font-bold text-sm tracking-wide mt-2 shadow-sm hover:scale-[1.01] active:scale-95 transition-all chunky-button"
+                  className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white py-3.5 rounded-full font-black text-xs uppercase tracking-wider mt-2 shadow-[0_4px_15px_rgba(20,184,166,0.3)] hover:scale-[1.02] active:scale-98 transition-all"
                 >
-                  {loading ? "Cadastrando..." : "Concluir Cadastro"}
+                  {loading ? "Criando Avatar..." : "Concluir Cadastro 🎮"}
                 </button>
               </form>
             </motion.div>
@@ -463,27 +496,29 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                 <ArrowLeft className="w-4 h-4" /> Voltar
               </button>
 
-              <h2 className="text-lg font-bold text-on-surface mb-1 text-center mt-4">
+              <h2 className="text-base font-black text-on-surface mb-1 text-center mt-4">
                 Recuperar Senha
               </h2>
-              <p className="text-xs text-on-surface-variant text-center mb-5">
-                Enviaremos um link seguro para o seu e-mail cadastrado
+              <p className="text-[11px] text-on-surface-variant text-center mb-5 font-semibold">
+                Enviaremos um link de recuperação para o seu e-mail cadastrado
               </p>
 
               {!recoverySent ? (
                 <form onSubmit={handleRecoverySubmit} className="flex flex-col gap-4">
                   <div>
-                    <label className="block text-[11px] font-black uppercase tracking-wider text-on-surface-variant mb-1.5">
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-on-surface-variant mb-1.5">
                       Seu E-mail Cadastrado
                     </label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-3.5 w-4 h-4 text-on-surface-variant/70" />
+                      <div className="absolute left-3 top-2.5 w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-600">
+                        <Mail className="w-4 h-4" />
+                      </div>
                       <input
                         type="email"
                         value={recoveryEmail}
                         onChange={(e) => setRecoveryEmail(e.target.value)}
                         placeholder="seuemail@exemplo.com"
-                        className="w-full bg-surface-container pl-10 pr-4 py-3 rounded-xl text-sm border-2 border-transparent focus:border-primary/30 outline-none transition-all text-on-surface font-medium placeholder:text-on-surface-variant/50"
+                        className="w-full bg-surface-container pl-12 pr-4 py-3 rounded-xl text-sm border-2 border-transparent focus:border-primary/40 focus:bg-white outline-none transition-all text-on-surface font-semibold placeholder:text-on-surface-variant/40"
                         required
                         autoFocus
                       />
@@ -500,10 +535,10 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-primary text-on-primary py-3.5 rounded-full font-bold text-sm tracking-wide mt-2 shadow-sm hover:scale-[1.01] active:scale-95 transition-all chunky-button flex items-center justify-center gap-2"
+                    className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white py-3.5 rounded-full font-black text-xs uppercase tracking-wider mt-2 shadow-[0_4px_15px_rgba(245,158,11,0.3)] hover:scale-[1.02] active:scale-98 transition-all flex items-center justify-center gap-2"
                   >
                     <Send className="w-4 h-4" />
-                    {loading ? "Enviando..." : "Enviar E-mail de Recuperação"}
+                    {loading ? "Enviando..." : "Enviar Link de Acesso"}
                   </button>
                 </form>
               ) : (
@@ -531,18 +566,31 @@ export default function LoginScreen({ users, onLogin }: LoginScreenProps) {
         </AnimatePresence>
       </div>
 
-      {/* Cloud & Realtime syncing description */}
-      <div className="w-full mt-5 bg-indigo-50 border border-indigo-100 rounded-xl p-4 flex gap-3 items-start">
-        <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+      {/* How it works Game Quest Board */}
+      <div className="w-full mt-6 bg-gradient-to-br from-indigo-500/5 via-purple-500/5 to-pink-500/5 border border-purple-100 rounded-2xl p-4 flex gap-3.5 items-start shadow-sm">
+        <div className="bg-gradient-to-tr from-purple-500 to-pink-500 p-2.5 rounded-xl text-white shrink-0 shadow-md">
+          <Trophy className="w-4 h-4 text-yellow-300" />
+        </div>
         <div className="flex-1">
-          <h4 className="text-xs font-bold text-primary">Sincronização em Nuvem (Firebase)</h4>
-          <p className="text-[10px] text-on-surface-variant leading-relaxed mt-0.5">
-            Os dados do Focus Kids agora estão seguros na nuvem! Toda a família vê as mesmas missões e pontuações em tempo real nas duas casas, com suporte para login de e-mail e redefinição de senha!
-          </p>
+          <h4 className="text-xs font-black uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
+            Como Funciona a sua Jornada:
+          </h4>
+          <ul className="text-[11px] text-on-surface-variant font-semibold mt-2.5 space-y-2 list-none pl-0">
+            <li className="flex items-start gap-2">
+              <span className="text-primary mt-0.5 shrink-0 text-sm">⚡</span>
+              <span><strong>Complete Missões:</strong> Faça suas tarefas diárias, rotinas e estudos para acumular progresso.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-purple-600 mt-0.5 shrink-0 text-sm">🪙</span>
+              <span><strong>Ganhe Pontos:</strong> Peça a aprovação dos pais no painel deles para coletar suas moedas de ouro.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-pink-500 mt-0.5 shrink-0 text-sm">🎁</span>
+              <span><strong>Resgate Prêmios:</strong> Troque suas moedas por tempo de tela, lanches e passeios incríveis!</span>
+            </li>
+          </ul>
         </div>
       </div>
-
-
     </div>
   );
 }
