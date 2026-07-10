@@ -93,6 +93,7 @@ export interface KidProfile {
   totalPointsAllTime: number;
   avatar: string;
   tabletBonusClaimedDate?: string; // YYYY-MM-DD to track daily bonus claims
+  lastResetDate?: string; // YYYY-MM-DD to track daily auto-resets of missions
 }
 
 export interface AppSettings {

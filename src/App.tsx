@@ -201,6 +201,66 @@ export default function App() {
     }
   }, [session]);
 
+  // Automatic daily reset of missions when date changes
+  useEffect(() => {
+    if (!profile || !missions || missions.length === 0) return;
+
+    const todayStr = getLocalDateString();
+    const profileLastReset = profile.lastResetDate;
+
+    // Check if the reset date on the server is different from today
+    if (profileLastReset && profileLastReset !== todayStr) {
+      console.log(`[Auto-Reset] Today is ${todayStr}, but last reset was ${profileLastReset}. Resetting missions.`);
+      
+      const performAutoReset = async () => {
+        setSyncStatus("syncing");
+        try {
+          // 1. Reset all missions
+          const promises = missions.map(m => {
+            const updateData: any = { completed: false, completedAt: null };
+            if (m.subtasks && m.subtasks.length > 0) {
+              updateData.completedSubtasks = m.subtasks.map(() => false);
+            } else {
+              updateData.completedSubtasks = [];
+            }
+            return updateDoc(doc(db, "missions", m.id), updateData);
+          });
+          await Promise.all(promises);
+
+          // 2. Update profile with new lastResetDate
+          await updateDoc(doc(db, "profiles", "bernardo"), {
+            lastResetDate: todayStr
+          });
+
+          await logActivity(
+            "points_added", 
+            `Novo dia (${formatLocalDate(todayStr)})! O progresso de todas as missões diárias de Bernardo foi reiniciado automaticamente. 🔄✨`, 
+            0, 
+            "🔄"
+          );
+          setSyncStatus("synced");
+        } catch (e) {
+          console.error("Error doing auto-reset:", e);
+          setSyncStatus("error");
+        }
+      };
+
+      performAutoReset();
+    } else if (!profileLastReset) {
+      // First time setting lastResetDate to prevent unexpected first-load reset if they already did tasks today
+      const setInitialResetDate = async () => {
+        try {
+          await updateDoc(doc(db, "profiles", "bernardo"), {
+            lastResetDate: todayStr
+          });
+        } catch (e) {
+          console.error("Error setting initial reset date:", e);
+        }
+      };
+      setInitialResetDate();
+    }
+  }, [profile?.name, profile?.lastResetDate, missions?.length]);
+
   // Helper to log activities durably
   const logActivity = async (
     type: ActivityLog["type"],
