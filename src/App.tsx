@@ -208,9 +208,20 @@ export default function App() {
     const todayStr = getLocalDateString();
     const profileLastReset = profile.lastResetDate;
 
-    // Check if the reset date on the server is different from today
-    if (profileLastReset && profileLastReset !== todayStr) {
-      console.log(`[Auto-Reset] Today is ${todayStr}, but last reset was ${profileLastReset}. Resetting missions.`);
+    // Find any mission that is marked completed but its completedAt date is not today (or is missing)
+    const staleCompletedMissions = missions.filter(m => {
+      if (!m.completed) return false;
+      if (!m.completedAt) return true; // Missing timestamp but is completed
+      const completedDay = getLocalDateStringFromISO(m.completedAt);
+      return completedDay !== todayStr; // Completed on a previous day
+    });
+
+    const hasStaleCompleted = staleCompletedMissions.length > 0;
+    const isDifferentDay = profileLastReset && profileLastReset !== todayStr;
+
+    // Check if the reset date on the server is different from today, or if there are completed missions from previous days
+    if (isDifferentDay || hasStaleCompleted) {
+      console.log(`[Auto-Reset] Resettable missions detected or date mismatch. todayStr: ${todayStr}, profileLastReset: ${profileLastReset}, staleCount: ${staleCompletedMissions.length}`);
       
       const performAutoReset = async () => {
         setSyncStatus("syncing");
@@ -259,7 +270,7 @@ export default function App() {
       };
       setInitialResetDate();
     }
-  }, [profile?.name, profile?.lastResetDate, missions?.length]);
+  }, [profile?.name, profile?.lastResetDate, missions]);
 
   // Helper to log activities durably
   const logActivity = async (
@@ -383,6 +394,18 @@ export default function App() {
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
+  };
+
+  const getLocalDateStringFromISO = (isoString: string) => {
+    try {
+      const d = new Date(isoString);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    } catch (e) {
+      return "";
+    }
   };
 
   const formatLocalDate = (dateStr: string) => {
