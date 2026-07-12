@@ -360,7 +360,17 @@ export default function ParentPanel({
     };
 
     try {
-      const response = await fetch("/api/copilot/task-breakdown", {
+      // Resolve correct API URL, routing to Cloud Run backend if accessed from a custom/Vercel domain
+      let apiUrl = "/api/copilot/task-breakdown";
+      const hostname = window.location.hostname;
+      const metaEnv = (import.meta as any).env;
+      if (metaEnv && metaEnv.VITE_API_URL) {
+        apiUrl = `${metaEnv.VITE_API_URL}/api/copilot/task-breakdown`;
+      } else if (hostname !== "localhost" && !hostname.endsWith("run.app")) {
+        apiUrl = `https://ais-pre-dopo2d6lwy4ii2clo5asza-146440916142.us-west2.run.app/api/copilot/task-breakdown`;
+      }
+
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ originalTask: missionTitle }),

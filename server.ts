@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import fs from "fs";
+import cors from "cors";
 import { DEFAULT_USERS, DEFAULT_MISSIONS, DEFAULT_REWARDS, DEFAULT_PROFILE } from "./src/initialData";
 
 dotenv.config();
@@ -11,6 +12,7 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
+app.use(cors());
 app.use(express.json());
 
 // Path to store state persistently in the container
