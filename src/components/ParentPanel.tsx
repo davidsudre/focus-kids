@@ -360,11 +360,14 @@ export default function ParentPanel({
     };
 
     try {
-      // Resolve correct API URL. Relative path handles localhost, preview, and custom domains (like focuskids.com.br) automatically.
+      // Resolve correct API URL. Since Vercel only hosts the static files, we route non-local and non-GCP domains to the Cloud Run backend URL.
       let apiUrl = "/api/copilot/task-breakdown";
+      const hostname = window.location.hostname;
       const metaEnv = (import.meta as any).env;
       if (metaEnv && metaEnv.VITE_API_URL) {
         apiUrl = `${metaEnv.VITE_API_URL}/api/copilot/task-breakdown`;
+      } else if (hostname !== "localhost" && hostname !== "127.0.0.1" && !hostname.endsWith("run.app")) {
+        apiUrl = "https://ais-pre-dopo2d6lwy4ii2clo5asza-146440916142.us-west2.run.app/api/copilot/task-breakdown";
       }
 
       const response = await fetch(apiUrl, {
