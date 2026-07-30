@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Mission, Reward, Period, KidProfile, ManagedUser, UserSession, ActivityLog, RedemptionLog, ApprovalRequest } from "../types";
 import { Plus, Edit3, Trash2, Sparkles, Check, HelpCircle, Save, X, RotateCcw, AlertTriangle, Key, UserPlus, Users, Link, Gift, ClipboardList, Lock, Unlock } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -143,7 +143,17 @@ export default function ParentPanel({
   // Kid profile modification states
   const [kidName, setKidName] = useState(profile.name);
   const [kidAvatar, setKidAvatar] = useState(profile.avatar);
+  const [kidCurrentPoints, setKidCurrentPoints] = useState(profile.currentPoints ?? 0);
+  const [kidTotalPointsAllTime, setKidTotalPointsAllTime] = useState(profile.totalPointsAllTime ?? 0);
   const [profileSaveSuccess, setProfileSaveSuccess] = useState(false);
+
+  // Sync states if profile prop updates
+  useEffect(() => {
+    setKidName(profile.name);
+    setKidAvatar(profile.avatar);
+    setKidCurrentPoints(profile.currentPoints ?? 0);
+    setKidTotalPointsAllTime(profile.totalPointsAllTime ?? 0);
+  }, [profile]);
 
   // Reset confirmation state
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -510,7 +520,12 @@ export default function ParentPanel({
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateKidProfile({ name: kidName, avatar: kidAvatar });
+    onUpdateKidProfile({
+      name: kidName,
+      avatar: kidAvatar,
+      currentPoints: Number(kidCurrentPoints) || 0,
+      totalPointsAllTime: Number(kidTotalPointsAllTime) || 0
+    });
     setProfileSaveSuccess(true);
     setTimeout(() => {
       setProfileSaveSuccess(false);
@@ -937,6 +952,34 @@ export default function ParentPanel({
                     {emoji}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/20">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-on-surface-variant">Saldo Atual de Pontos (para resgates)</label>
+                <input
+                  type="number"
+                  value={kidCurrentPoints}
+                  onChange={e => setKidCurrentPoints(Number(e.target.value))}
+                  className="bg-surface-container border-2 border-transparent focus:border-primary/50 focus:bg-surface-container-lowest p-3 rounded-lg text-sm font-extrabold text-primary"
+                  placeholder="Ex: 2000"
+                  min={0}
+                />
+                <span className="text-[11px] text-on-surface-variant">Pontos acumulados disponíveis para resgatar recompensas.</span>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-on-surface-variant">Pontuação Total Histórica (conquistas)</label>
+                <input
+                  type="number"
+                  value={kidTotalPointsAllTime}
+                  onChange={e => setKidTotalPointsAllTime(Number(e.target.value))}
+                  className="bg-surface-container border-2 border-transparent focus:border-primary/50 focus:bg-surface-container-lowest p-3 rounded-lg text-sm font-extrabold text-on-surface"
+                  placeholder="Ex: 2000"
+                  min={0}
+                />
+                <span className="text-[11px] text-on-surface-variant">Pontuação total acumulada em toda a jornada.</span>
               </div>
             </div>
 
