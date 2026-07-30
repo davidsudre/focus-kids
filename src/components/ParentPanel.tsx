@@ -159,6 +159,8 @@ export default function ParentPanel({
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showResetPointsConfirm, setShowResetPointsConfirm] = useState(false);
   const [showRestoreMissionsConfirm, setShowRestoreMissionsConfirm] = useState(false);
+  const [resetPasswordInput, setResetPasswordInput] = useState("");
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
 
   // Open modal for new mission
   const openNewMissionModal = () => {
@@ -1054,23 +1056,53 @@ export default function ParentPanel({
               </p>
 
               {showResetPointsConfirm ? (
-                <div className="flex flex-col gap-2 mt-2">
-                  <span className="text-xs font-bold text-error">Tem certeza que deseja zerar TODOS os pontos e conquistas de Bernardo? Essa ação não pode ser desfeita!</span>
-                  <div className="flex gap-2">
+                <div className="flex flex-col gap-2 mt-2 bg-error-container/20 p-3 rounded-xl border border-error/30">
+                  <span className="text-xs font-bold text-error">
+                    ⚠️ Esta ação zerará TODOS os pontos e histórico de Bernardo. Para confirmar, digite sua senha de responsável:
+                  </span>
+                  <input
+                    type="password"
+                    placeholder="Digite sua senha de responsável"
+                    value={resetPasswordInput}
+                    onChange={(e) => {
+                      setResetPasswordInput(e.target.value);
+                      setResetPasswordError(null);
+                    }}
+                    className="bg-surface-container-lowest border border-outline-variant/40 p-2.5 rounded-lg text-xs font-bold text-on-surface"
+                  />
+                  {resetPasswordError && (
+                    <span className="text-[11px] font-bold text-error animate-pulse">
+                      {resetPasswordError}
+                    </span>
+                  )}
+                  <div className="flex gap-2 mt-1">
                     <button
                       type="button"
                       onClick={() => {
+                        const currentUserObj = users.find(
+                          (u) => u.username === session.username || u.name === session.name
+                        );
+                        if (!currentUserObj || resetPasswordInput.trim() !== currentUserObj.password) {
+                          setResetPasswordError("Senha incorreta. Ação cancelada por segurança.");
+                          return;
+                        }
                         onUpdateKidProfile({ currentPoints: 0, totalPointsAllTime: 0, streak: 0 });
                         setShowResetPointsConfirm(false);
+                        setResetPasswordInput("");
+                        setResetPasswordError(null);
                         alert("Pontuação do Bernardo foi zerada com sucesso!");
                       }}
                       className="flex-1 bg-error text-on-error py-2.5 rounded-full font-bold text-xs chunky-button"
                     >
-                      Sim, Zerar Pontos!
+                      Confirmar Zerar
                     </button>
                     <button
                       type="button"
-                      onClick={() => setShowResetPointsConfirm(false)}
+                      onClick={() => {
+                        setShowResetPointsConfirm(false);
+                        setResetPasswordInput("");
+                        setResetPasswordError(null);
+                      }}
                       className="flex-1 bg-surface-container text-on-surface-variant py-2.5 rounded-full font-bold text-xs chunky-button"
                     >
                       Cancelar

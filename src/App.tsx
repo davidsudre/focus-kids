@@ -43,7 +43,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState<"synced" | "syncing" | "error">("synced");
 
   // Computed: is parent logged in?
-  const isParent = session?.role === "pai" || session?.role === "mae";
+  const isParent = session?.role === "pai" || session?.role === "mae" || session?.role === "parent";
 
   // 1. Listen to all Firestore collections in real-time
   useEffect(() => {
@@ -631,6 +631,10 @@ export default function App() {
   };
 
   const handleResetMissions = async () => {
+    if (!isParent) {
+      alert("Apenas pais/responsáveis podem realizar esta ação.");
+      return;
+    }
     setSyncStatus("syncing");
     try {
       const promises = missions.map(m => {
@@ -652,6 +656,10 @@ export default function App() {
   };
 
   const handleRestoreDefaultMissions = async () => {
+    if (!isParent) {
+      alert("Apenas pais/responsáveis podem realizar esta ação.");
+      return;
+    }
     setSyncStatus("syncing");
     try {
       // 1. Fetch and delete all current missions in Firestore
@@ -672,6 +680,10 @@ export default function App() {
   };
 
   const handleUpdateKidProfile = async (updates: Partial<KidProfile>) => {
+    if (!isParent) {
+      alert("Apenas pais/responsáveis podem alterar ou zerar a pontuação de Bernardo.");
+      return;
+    }
     setSyncStatus("syncing");
     try {
       await updateDoc(doc(db, "profiles", "bernardo"), updates);
