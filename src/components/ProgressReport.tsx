@@ -245,7 +245,10 @@ export default function ProgressReport({ missions, profile, history = [], activi
                     )}
                   </motion.div>
                 </div>
-                <span className={`text-[10px] font-extrabold tracking-wide ${isToday ? "text-indigo-600 font-black uppercase underline decoration-2 underline-offset-4" : "text-on-surface-variant/80"}`}>
+                <span
+                  translate="no"
+                  className={`notranslate text-[10px] font-extrabold tracking-wide ${isToday ? "text-indigo-600 font-black uppercase underline decoration-2 underline-offset-4" : "text-on-surface-variant/80"}`}
+                >
                   {day.name}
                 </span>
               </div>
