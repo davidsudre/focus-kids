@@ -717,6 +717,56 @@ export default function App() {
     }
   };
 
+  const handleRecalculatePointsFromHistory = async () => {
+    if (!isParent) {
+      alert("Apenas pais/responsáveis podem recalcular os pontos.");
+      return;
+    }
+    setSyncStatus("syncing");
+    try {
+      const approvalSnap = await getDocs(collection(db, "approvals"));
+      let approvedPoints = 0;
+      let countApproved = 0;
+      approvalSnap.forEach(d => {
+        const data = d.data();
+        if (data.status === "approved") {
+          approvedPoints += (data.points || 0);
+          countApproved++;
+        }
+      });
+
+      const redemptionsSnap = await getDocs(collection(db, "redemptions"));
+      let totalRedeemed = 0;
+      redemptionsSnap.forEach(d => {
+        const data = d.data();
+        if (data.status !== "rejected") {
+          totalRedeemed += (data.cost || 0);
+        }
+      });
+
+      const netCurrentPoints = Math.max(0, approvedPoints - totalRedeemed);
+      const totalAllTime = approvedPoints;
+
+      await updateDoc(doc(db, "profiles", "bernardo"), {
+        currentPoints: netCurrentPoints,
+        totalPointsAllTime: totalAllTime
+      });
+
+      await logActivity(
+        "points_added",
+        `Sincronizou e recalculou a pontuação de Bernardo com base no histórico (${countApproved} tarefas aprovadas = ${netCurrentPoints} pts)! 🛡️✨`,
+        0,
+        "🔄"
+      );
+      setSyncStatus("synced");
+      alert(`Pontuação sincronizada com sucesso!\n\nEncontradas ${countApproved} missões aprovadas.\nTotal acumulado: ${totalAllTime} pts.\nSaldo atual disponível: ${netCurrentPoints} pts.`);
+    } catch (e) {
+      console.error("Erro ao recalcular pontos:", e);
+      setSyncStatus("error");
+      alert("Erro ao recalcular pontos. Verifique a conexão.");
+    }
+  };
+
   const handleClaimTabletBonus = async () => {
     setSyncStatus("syncing");
     try {
@@ -947,6 +997,7 @@ export default function App() {
               approvals={approvals}
               onApprovePoints={handleApprovePoints}
               onRejectPoints={handleRejectPoints}
+              onRecalculatePointsFromHistory={handleRecalculatePointsFromHistory}
             />
           )}
         </main>

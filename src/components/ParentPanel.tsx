@@ -28,6 +28,7 @@ interface ParentPanelProps {
   approvals?: ApprovalRequest[];
   onApprovePoints?: (id: string) => void;
   onRejectPoints?: (id: string) => void;
+  onRecalculatePointsFromHistory?: () => void;
 }
 
 const formatSwedishDateToPtBr = (dateStr: string) => {
@@ -82,7 +83,8 @@ export default function ParentPanel({
   onClearLogs,
   approvals = [],
   onApprovePoints,
-  onRejectPoints
+  onRejectPoints,
+  onRecalculatePointsFromHistory
 }: ParentPanelProps) {
   // Navigation inside parent panel: "missions" | "rewards" | "settings" | "users" | "logs"
   const isDavidRoot = session.username === "davidsudre";
@@ -522,11 +524,22 @@ export default function ParentPanel({
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+    const newCurrent = Number(kidCurrentPoints);
+    const newTotal = Number(kidTotalPointsAllTime);
+
+    if ((profile.totalPointsAllTime > 0 || profile.currentPoints > 0) && (newCurrent === 0 && newTotal === 0)) {
+      if (!confirm("Atenção: Você está alterando a pontuação para 0 neste formulário. Para zerar todo o histórico, use a opção oficial com senha na 'Zona de Risco'.\n\nDeseja realmente salvar com 0 pontos?")) {
+        setKidCurrentPoints(profile.currentPoints ?? 0);
+        setKidTotalPointsAllTime(profile.totalPointsAllTime ?? 0);
+        return;
+      }
+    }
+
     onUpdateKidProfile({
       name: kidName,
       avatar: kidAvatar,
-      currentPoints: Number(kidCurrentPoints) || 0,
-      totalPointsAllTime: Number(kidTotalPointsAllTime) || 0
+      currentPoints: isNaN(newCurrent) ? (profile.currentPoints ?? 0) : newCurrent,
+      totalPointsAllTime: isNaN(newTotal) ? (profile.totalPointsAllTime ?? 0) : newTotal
     });
     setProfileSaveSuccess(true);
     setTimeout(() => {
@@ -999,6 +1012,31 @@ export default function ParentPanel({
               Salvar Alterações de Perfil
             </button>
           </form>
+
+          {/* Point Synchronization & Recalculation Card */}
+          <div className="bg-primary-container/20 p-5 rounded-2xl border border-primary/30 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-base text-primary flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-primary" /> Recalcular / Sincronizar Pontos com o Histórico
+              </h4>
+              <span className="text-[10px] uppercase tracking-wider bg-primary/10 text-primary font-black px-2.5 py-1 rounded-full">
+                Proteção Ativa 🛡️
+              </span>
+            </div>
+            <p className="text-xs text-on-surface-variant leading-relaxed">
+              Os pontos das tarefas de Bernardo <strong>NUNCA</strong> são zerados pela virada do mês ou do dia. Se por algum motivo a pontuação parecer desatualizada, clique abaixo para escanear todas as tarefas aprovadas no servidor de nuvem e recompor os pontos exatos automaticamente.
+            </p>
+            {onRecalculatePointsFromHistory && (
+              <button
+                type="button"
+                onClick={onRecalculatePointsFromHistory}
+                className="bg-primary text-on-primary py-2.5 px-4 rounded-full font-bold text-xs chunky-button self-start flex items-center gap-2"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Recalcular Pontos do Histórico Agora
+              </button>
+            )}
+          </div>
 
           {/* Reset Action */}
           <div className="bg-surface-container-lowest p-5 rounded-lg border border-outline-variant/30 flex flex-col gap-4">
